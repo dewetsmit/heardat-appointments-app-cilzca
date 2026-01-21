@@ -1,130 +1,165 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { Platform } from "react-native";
+import { authClient, storeWebBearerToken } from "@/lib/auth";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
-import { apiRequest, getAuthHeader } from '@/utils/api';
-import { User } from '@/types';
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  image?: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string, fullName: string, role: string) => Promise<void>;
-  logout: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
+  loading: boolean;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInWithGitHub: () => Promise<void>;
+  signOut: () => Promise<void>;
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+function openOAuthPopup(provider: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popup = window.open(
+      popupUrl,
+      "oauth-popup",
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+
+    if (!popup) {
+      reject(new Error("Failed to open popup. Please allow popups."));
+      return;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "oauth-success" && event.data?.token) {
+        window.removeEventListener("message", handleMessage);
+        clearInterval(checkClosed);
+        resolve(event.data.token);
+      } else if (event.data?.type === "oauth-error") {
+        window.removeEventListener("message", handleMessage);
+        clearInterval(checkClosed);
+        reject(new Error(event.data.error || "OAuth failed"));
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        window.removeEventListener("message", handleMessage);
+        reject(new Error("Authentication cancelled"));
+      }
+    }, 500);
+  });
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStoredAuth();
+    fetchUser();
   }, []);
 
-  async function loadStoredAuth() {
-    console.log('Loading stored auth...');
+  const fetchUser = async () => {
     try {
-      const storedToken = await SecureStore.getItemAsync('auth_token');
-      if (storedToken) {
-        console.log('Found stored token, fetching user data...');
-        setToken(storedToken);
-        const userData = await apiRequest('/api/auth/me', {
-          headers: getAuthHeader(storedToken),
-        });
-        setUser(userData.user);
-        console.log('User loaded:', userData.user);
+      setLoading(true);
+      const session = await authClient.getSession();
+      if (session?.data?.user) {
+        setUser(session.data.user as User);
+      } else {
+        setUser(null);
       }
     } catch (error) {
-      console.error('Failed to load stored auth:', error);
-      await SecureStore.deleteItemAsync('auth_token');
+      console.error("Failed to fetch user:", error);
+      setUser(null);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }
+  };
 
-  async function login(username: string, password: string) {
-    console.log('Logging in user:', username);
+  const signInWithEmail = async (email: string, password: string) => {
     try {
-      const response = await apiRequest('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-
-      setUser(response.user);
-      setToken(response.token);
-      await SecureStore.setItemAsync('auth_token', response.token);
-      console.log('Login successful:', response.user);
+      await authClient.signIn.email({ email, password });
+      await fetchUser();
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error("Email sign in failed:", error);
       throw error;
     }
-  }
+  };
 
-  async function register(
-    username: string,
-    email: string,
-    password: string,
-    fullName: string,
-    role: string
-  ) {
-    console.log('Registering user:', username);
+  const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
-      const response = await apiRequest('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          username,
-          email,
-          password,
-          full_name: fullName,
-          role,
-        }),
+      await authClient.signUp.email({
+        email,
+        password,
+        name,
       });
-
-      setUser(response.user);
-      setToken(response.token);
-      await SecureStore.setItemAsync('auth_token', response.token);
-      console.log('Registration successful:', response.user);
+      await fetchUser();
     } catch (error) {
-      console.error('Registration failed:', error);
+      console.error("Email sign up failed:", error);
       throw error;
     }
-  }
+  };
 
-  async function logout() {
-    console.log('Logging out user');
-    setUser(null);
-    setToken(null);
-    await SecureStore.deleteItemAsync('auth_token');
-  }
-
-  async function resetPassword(email: string) {
-    console.log('Resetting password for:', email);
+  const signInWithSocial = async (provider: "google" | "apple" | "github") => {
     try {
-      await apiRequest('/api/auth/reset-password', {
-        method: 'POST',
-        body: JSON.stringify({ email }),
-      });
-      console.log('Password reset email sent');
+      if (Platform.OS === "web") {
+        const token = await openOAuthPopup(provider);
+        storeWebBearerToken(token);
+        await fetchUser();
+      } else {
+        await authClient.signIn.social({
+          provider,
+          callbackURL: "/",
+        });
+        await fetchUser();
+      }
     } catch (error) {
-      console.error('Password reset failed:', error);
+      console.error(`${provider} sign in failed:`, error);
       throw error;
     }
-  }
+  };
+
+  const signInWithGoogle = () => signInWithSocial("google");
+  const signInWithApple = () => signInWithSocial("apple");
+  const signInWithGitHub = () => signInWithSocial("github");
+
+  const signOut = async () => {
+    try {
+      await authClient.signOut();
+      setUser(null);
+    } catch (error) {
+      console.error("Sign out failed:", error);
+      throw error;
+    }
+  };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
-        isLoading,
-        login,
-        register,
-        logout,
-        resetPassword,
+        loading,
+        signInWithEmail,
+        signUpWithEmail,
+        signInWithGoogle,
+        signInWithApple,
+        signInWithGitHub,
+        signOut,
+        fetchUser,
       }}
     >
       {children}
@@ -135,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 }

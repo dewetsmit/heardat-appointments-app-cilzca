@@ -28,7 +28,7 @@ export const unstable_settings = {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const networkState = useNetworkState();
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -55,7 +55,7 @@ function RootLayoutNav() {
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
   useEffect(() => {
-    if (isLoading || !loaded) {
+    if (loading || !loaded) {
       console.log('Auth loading or fonts loading...');
       return;
     }
@@ -71,9 +71,9 @@ function RootLayoutNav() {
       console.log('User authenticated, redirecting to tabs');
       router.replace('/(tabs)/(home)/');
     }
-  }, [user, segments, isLoading, loaded]);
+  }, [user, segments, loading, loaded]);
 
-  if (!loaded || isLoading) {
+  if (!loaded || loading) {
     return null;
   }
 
@@ -113,6 +113,8 @@ function RootLayoutNav() {
             <GestureHandlerRootView>
               <Stack>
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
+                <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
+                <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style={"auto"} />
