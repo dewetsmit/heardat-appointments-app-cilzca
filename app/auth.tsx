@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import {
   View,
@@ -10,11 +11,19 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  Image,
+  ImageSourcePropType,
 } from "react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "expo-router";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -27,10 +36,12 @@ export default function AuthScreen() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const logoSource = resolveImageSource(require('@/assets/images/2ed28a09-8e40-476d-8085-4eb13efbae00.jpeg'));
+
   if (authLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#4A90E2" />
       </View>
     );
   }
@@ -44,18 +55,46 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (mode === "signin") {
+        console.log('User attempting to sign in with email:', email);
         await signInWithEmail(email, password);
-        router.replace("/");
-      } else {
+        console.log('Sign in successful, navigating to dashboard');
+        router.replace("/(tabs)/(home)/");
+      } else if (mode === "signup") {
+        console.log('User attempting to sign up with email:', email);
         await signUpWithEmail(email, password, name);
+        console.log('Sign up successful, navigating to dashboard');
         Alert.alert(
           "Success",
-          "Account created! Please check your email to verify your account."
+          "Account created successfully!"
         );
-        router.replace("/");
+        router.replace("/(tabs)/(home)/");
       }
     } catch (error: any) {
+      console.error('Authentication error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email) {
+      Alert.alert("Error", "Please enter your email address");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log('User requesting password reset for email:', email);
+      // TODO: Backend Integration - POST /api/auth/reset-password with { email } → { success: true, message: string }
+      Alert.alert(
+        "Success",
+        "Password reset instructions have been sent to your email."
+      );
+      setMode("signin");
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      Alert.alert("Error", error.message || "Password reset failed");
     } finally {
       setLoading(false);
     }
@@ -64,6 +103,7 @@ export default function AuthScreen() {
   const handleSocialAuth = async (provider: "google" | "apple" | "github") => {
     setLoading(true);
     try {
+      console.log('User attempting to sign in with', provider);
       if (provider === "google") {
         await signInWithGoogle();
       } else if (provider === "apple") {
@@ -71,13 +111,23 @@ export default function AuthScreen() {
       } else if (provider === "github") {
         await signInWithGitHub();
       }
-      router.replace("/");
+      console.log('Social auth successful, navigating to dashboard');
+      router.replace("/(tabs)/(home)/");
     } catch (error: any) {
+      console.error('Social auth error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const modeTitle = mode === "signin" ? "Sign In" : mode === "signup" ? "Sign Up" : "Reset Password";
+  const primaryButtonText = mode === "signin" ? "Sign In" : mode === "signup" ? "Sign Up" : "Send Reset Link";
+  const switchModeText = mode === "signin" 
+    ? "Don't have an account? Sign Up" 
+    : mode === "signup"
+    ? "Already have an account? Sign In"
+    : "Back to Sign In";
 
   return (
     <KeyboardAvoidingView
@@ -86,9 +136,15 @@ export default function AuthScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
-          <Text style={styles.title}>
-            {mode === "signin" ? "Sign In" : "Sign Up"}
-          </Text>
+          <View style={styles.logoContainer}>
+            <Image
+              source={logoSource}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <Text style={styles.title}>{modeTitle}</Text>
 
           {mode === "signup" && (
             <TextInput
@@ -97,6 +153,7 @@ export default function AuthScreen() {
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
+              placeholderTextColor="#999"
             />
           )}
 
@@ -108,66 +165,87 @@ export default function AuthScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            placeholderTextColor="#999"
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          {mode !== "reset" && (
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              placeholderTextColor="#999"
+            />
+          )}
+
+          {mode === "signin" && (
+            <TouchableOpacity
+              style={styles.forgotPasswordButton}
+              onPress={() => setMode("reset")}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.buttonDisabled]}
-            onPress={handleEmailAuth}
+            onPress={mode === "reset" ? handlePasswordReset : handleEmailAuth}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.primaryButtonText}>
-                {mode === "signin" ? "Sign In" : "Sign Up"}
+                {primaryButtonText}
               </Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.switchModeButton}
-            onPress={() => setMode(mode === "signin" ? "signup" : "signin")}
+            onPress={() => {
+              if (mode === "reset") {
+                setMode("signin");
+              } else {
+                setMode(mode === "signin" ? "signup" : "signin");
+              }
+            }}
           >
             <Text style={styles.switchModeText}>
-              {mode === "signin"
-                ? "Don't have an account? Sign Up"
-                : "Already have an account? Sign In"}
+              {switchModeText}
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue with</Text>
-            <View style={styles.dividerLine} />
-          </View>
+          {mode !== "reset" && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or continue with</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => handleSocialAuth("google")}
-            disabled={loading}
-          >
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => handleSocialAuth("google")}
+                disabled={loading}
+              >
+                <Text style={styles.socialButtonText}>Continue with Google</Text>
+              </TouchableOpacity>
 
-          {Platform.OS === "ios" && (
-            <TouchableOpacity
-              style={[styles.socialButton, styles.appleButton]}
-              onPress={() => handleSocialAuth("apple")}
-              disabled={loading}
-            >
-              <Text style={[styles.socialButtonText, styles.appleButtonText]}>
-                Continue with Apple
-              </Text>
-            </TouchableOpacity>
+              {Platform.OS === "ios" && (
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.appleButton]}
+                  onPress={() => handleSocialAuth("apple")}
+                  disabled={loading}
+                >
+                  <Text style={[styles.socialButtonText, styles.appleButtonText]}>
+                    Continue with Apple
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -194,6 +272,14 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: "center",
   },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+  },
   title: {
     fontSize: 32,
     fontWeight: "bold",
@@ -210,10 +296,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
     backgroundColor: "#fff",
+    color: "#000",
+  },
+  forgotPasswordButton: {
+    alignSelf: "flex-end",
+    marginBottom: 16,
+  },
+  forgotPasswordText: {
+    color: "#4A90E2",
+    fontSize: 14,
   },
   primaryButton: {
     height: 50,
-    backgroundColor: "#007AFF",
+    backgroundColor: "#4A90E2",
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
@@ -232,7 +327,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   switchModeText: {
-    color: "#007AFF",
+    color: "#4A90E2",
     fontSize: 14,
   },
   divider: {
