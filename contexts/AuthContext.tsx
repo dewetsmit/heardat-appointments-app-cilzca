@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
 import { authClient, storeWebBearerToken } from "@/lib/auth";
@@ -6,11 +7,13 @@ interface User {
   id: string;
   email: string;
   name?: string;
+  full_name?: string;
   image?: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
@@ -68,6 +71,7 @@ function openOAuthPopup(provider: string): Promise<string> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,16 +80,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
+      console.log('Fetching user session...');
       setLoading(true);
       const session = await authClient.getSession();
-      if (session?.data?.user) {
+      console.log('Session response:', JSON.stringify(session, null, 2));
+      
+      if (session?.data?.session && session?.data?.user) {
+        console.log('User authenticated:', session.data.user.email);
         setUser(session.data.user as User);
+        setToken(session.data.session.token || null);
       } else {
+        console.log('No active session found');
         setUser(null);
+        setToken(null);
       }
     } catch (error) {
       console.error("Failed to fetch user:", error);
       setUser(null);
+      setToken(null);
     } finally {
       setLoading(false);
     }
@@ -93,33 +105,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      await authClient.signIn.email({ email, password });
+      console.log('Attempting sign in with email:', email);
+      const response = await authClient.signIn.email({ 
+        email, 
+        password,
+        fetchOptions: {
+          onSuccess: async (ctx) => {
+            console.log('Sign in success callback:', ctx);
+          },
+          onError: (ctx) => {
+            console.error('Sign in error callback:', ctx);
+          }
+        }
+      });
+      
+      console.log('Sign in response:', JSON.stringify(response, null, 2));
+      
+      if (response.error) {
+        console.error('Sign in error:', response.error);
+        const errorMessage = response.error.message || 'Invalid email or password';
+        throw new Error(errorMessage);
+      }
+      
+      // Wait a moment for the session to be established
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Fetch the user session
       await fetchUser();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Email sign in failed:", error);
-      throw error;
+      throw new Error(error.message || 'Invalid email or password. Please check your credentials and try again.');
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
-      await authClient.signUp.email({
+      console.log('Attempting sign up with email:', email, 'name:', name);
+      const response = await authClient.signUp.email({
         email,
         password,
         name,
+        fetchOptions: {
+          onSuccess: async (ctx) => {
+            console.log('Sign up success callback:', ctx);
+          },
+          onError: (ctx) => {
+            console.error('Sign up error callback:', ctx);
+          }
+        }
       });
+      
+      console.log('Sign up response:', JSON.stringify(response, null, 2));
+      
+      if (response.error) {
+        console.error('Sign up error:', response.error);
+        const errorMessage = response.error.message || 'Sign up failed';
+        
+        // Check for common error messages
+        if (errorMessage.includes('already exists') || errorMessage.includes('duplicate')) {
+          throw new Error('An account with this email already exists. Please sign in instead.');
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Wait a moment for the session to be established
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Fetch the user session
       await fetchUser();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Email sign up failed:", error);
-      throw error;
+      throw new Error(error.message || 'Sign up failed. Please try again.');
     }
   };
 
   const signInWithSocial = async (provider: "google" | "apple" | "github") => {
     try {
+      console.log('Attempting social sign in with:', provider);
       if (Platform.OS === "web") {
-        const token = await openOAuthPopup(provider);
-        storeWebBearerToken(token);
+        const tokenValue = await openOAuthPopup(provider);
+        storeWebBearerToken(tokenValue);
         await fetchUser();
       } else {
         await authClient.signIn.social({
@@ -128,9 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         await fetchUser();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`${provider} sign in failed:`, error);
-      throw error;
+      throw new Error(error.message || `${provider} sign in failed`);
     }
   };
 
@@ -140,8 +206,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
+      console.log('Signing out...');
       await authClient.signOut();
       setUser(null);
+      setToken(null);
+      console.log('Sign out successful');
     } catch (error) {
       console.error("Sign out failed:", error);
       throw error;
@@ -152,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        token,
         loading,
         signInWithEmail,
         signUpWithEmail,

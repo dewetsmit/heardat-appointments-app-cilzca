@@ -60,7 +60,7 @@ function RootLayoutNav() {
       return;
     }
 
-    const inAuthGroup = segments[0] === 'auth';
+    const inAuthGroup = segments[0] === 'auth' || segments[0] === 'auth-popup' || segments[0] === 'auth-callback';
 
     console.log('Auth state changed:', { user: !!user, inAuthGroup, segments });
 
@@ -68,7 +68,7 @@ function RootLayoutNav() {
       console.log('User not authenticated, redirecting to auth');
       router.replace('/auth');
     } else if (user && inAuthGroup) {
-      console.log('User authenticated, redirecting to tabs');
+      console.log('User authenticated, redirecting to dashboard');
       router.replace('/(tabs)/(home)/');
     }
   }, [user, segments, loading, loaded]);

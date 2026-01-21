@@ -15,7 +15,6 @@ import {
   ImageSourcePropType,
 } from "react-native";
 import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "expo-router";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -26,7 +25,6 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 export default function AuthScreen() {
-  const router = useRouter();
   const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInWithApple, signInWithGitHub, loading: authLoading } =
     useAuth();
 
@@ -57,17 +55,15 @@ export default function AuthScreen() {
       if (mode === "signin") {
         console.log('User attempting to sign in with email:', email);
         await signInWithEmail(email, password);
-        console.log('Sign in successful, navigating to dashboard');
-        router.replace("/(tabs)/(home)/");
+        console.log('Sign in successful - navigation will be handled by _layout');
       } else if (mode === "signup") {
         console.log('User attempting to sign up with email:', email);
         await signUpWithEmail(email, password, name);
-        console.log('Sign up successful, navigating to dashboard');
+        console.log('Sign up successful - navigation will be handled by _layout');
         Alert.alert(
           "Success",
           "Account created successfully!"
         );
-        router.replace("/(tabs)/(home)/");
       }
     } catch (error: any) {
       console.error('Authentication error:', error);
@@ -111,8 +107,7 @@ export default function AuthScreen() {
       } else if (provider === "github") {
         await signInWithGitHub();
       }
-      console.log('Social auth successful, navigating to dashboard');
-      router.replace("/(tabs)/(home)/");
+      console.log('Social auth successful - navigation will be handled by _layout');
     } catch (error: any) {
       console.error('Social auth error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
