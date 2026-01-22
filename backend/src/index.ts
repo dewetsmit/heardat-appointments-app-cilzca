@@ -4,6 +4,9 @@ import * as authSchema from './db/auth-schema.js';
 import { registerAudiologistRoutes } from './routes/audiologists.js';
 import { registerAppointmentRoutes } from './routes/appointments.js';
 import { registerDashboardRoutes } from './routes/dashboard.js';
+import { registerClientRoutes } from './routes/clients.js';
+import { registerBranchRoutes } from './routes/branches.js';
+import { registerProcedureRoutes } from './routes/procedures.js';
 
 // Combine all schemas
 const schema = { ...appSchema, ...authSchema };
@@ -22,6 +25,9 @@ app.withAuth();
 registerAudiologistRoutes(app);
 registerAppointmentRoutes(app);
 registerDashboardRoutes(app);
+registerClientRoutes(app);
+registerBranchRoutes(app);
+registerProcedureRoutes(app);
 
 await app.run();
-app.logger.info('Application running with appointment management system');
+app.logger.info('Application running with full appointment management system');

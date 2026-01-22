@@ -24,16 +24,49 @@ export const audiologists = pgTable('audiologists', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Clients table
+export const clients = pgTable('clients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  practiceId: uuid('practice_id').notNull().references(() => practices.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Branches table
+export const branches = pgTable('branches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  address: text('address'),
+  practiceId: uuid('practice_id').notNull().references(() => practices.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Procedures table
+export const procedures = pgTable('procedures', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description'),
+  durationMinutes: integer('duration_minutes').default(30).notNull(),
+  practiceId: uuid('practice_id').notNull().references(() => practices.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Appointments table
 export const appointments = pgTable('appointments', {
   id: uuid('id').primaryKey().defaultRandom(),
-  patientName: text('patient_name').notNull(),
-  patientEmail: text('patient_email'),
-  patientPhone: text('patient_phone'),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  branchId: uuid('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
+  procedureId: uuid('procedure_id').notNull().references(() => procedures.id, { onDelete: 'cascade' }),
   audiologistId: uuid('audiologist_id').notNull().references(() => audiologists.id, { onDelete: 'cascade' }),
+  assistantId: uuid('assistant_id').references(() => audiologists.id, { onDelete: 'set null' }),
   appointmentDate: timestamp('appointment_date').notNull(),
   durationMinutes: integer('duration_minutes').default(60).notNull(),
   status: text('status', { enum: ['scheduled', 'completed', 'cancelled', 'no-show'] }).default('scheduled').notNull(),
+  sendReminders: boolean('send_reminders').default(true).notNull(),
+  isRecurring: boolean('is_recurring').default(false).notNull(),
+  recurrencePattern: text('recurrence_pattern'),
   notes: text('notes'),
   createdBy: text('created_by').notNull().references(() => user.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -43,6 +76,9 @@ export const appointments = pgTable('appointments', {
 // Relations
 export const practicesRelations = relations(practices, ({ many }) => ({
   audiologists: many(audiologists),
+  clients: many(clients),
+  branches: many(branches),
+  procedures: many(procedures),
 }));
 
 export const audiologistsRelations = relations(audiologists, ({ one, many }) => ({
@@ -55,12 +91,54 @@ export const audiologistsRelations = relations(audiologists, ({ one, many }) => 
     references: [practices.id],
   }),
   appointments: many(appointments),
+  assistantAppointments: many(appointments, { relationName: 'assistant' }),
+}));
+
+export const clientsRelations = relations(clients, ({ one, many }) => ({
+  practice: one(practices, {
+    fields: [clients.practiceId],
+    references: [practices.id],
+  }),
+  appointments: many(appointments),
+}));
+
+export const branchesRelations = relations(branches, ({ one, many }) => ({
+  practice: one(practices, {
+    fields: [branches.practiceId],
+    references: [practices.id],
+  }),
+  appointments: many(appointments),
+}));
+
+export const proceduresRelations = relations(procedures, ({ one, many }) => ({
+  practice: one(practices, {
+    fields: [procedures.practiceId],
+    references: [practices.id],
+  }),
+  appointments: many(appointments),
 }));
 
 export const appointmentsRelations = relations(appointments, ({ one }) => ({
+  client: one(clients, {
+    fields: [appointments.clientId],
+    references: [clients.id],
+  }),
+  branch: one(branches, {
+    fields: [appointments.branchId],
+    references: [branches.id],
+  }),
+  procedure: one(procedures, {
+    fields: [appointments.procedureId],
+    references: [procedures.id],
+  }),
   audiologist: one(audiologists, {
     fields: [appointments.audiologistId],
     references: [audiologists.id],
+  }),
+  assistant: one(audiologists, {
+    fields: [appointments.assistantId],
+    references: [audiologists.id],
+    relationName: 'assistant',
   }),
   createdByUser: one(user, {
     fields: [appointments.createdBy],

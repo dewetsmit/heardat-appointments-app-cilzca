@@ -6,6 +6,56 @@ import type { App } from '../index.js';
 export function registerAudiologistRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
+  // GET /api/assistants - Get all audiologists who can be assistants
+  app.fastify.get(
+    '/api/assistants',
+    {
+      schema: {
+        description: 'Get all assistants (audiologists)',
+        tags: ['assistants'],
+        response: {
+          200: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                full_name: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      app.logger.info({}, 'Fetching assistants');
+
+      try {
+        const assistants = await app.db
+          .select({
+            id: schema.audiologists.id,
+            fullName: schema.user.name,
+          })
+          .from(schema.audiologists)
+          .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
+          .where(eq(schema.audiologists.isActive, true));
+
+        app.logger.info({ count: assistants.length }, 'Assistants fetched successfully');
+
+        return assistants.map((a) => ({
+          id: a.id,
+          full_name: a.fullName,
+        }));
+      } catch (error) {
+        app.logger.error({ err: error }, 'Failed to fetch assistants');
+        throw error;
+      }
+    }
+  );
+
   // GET /api/audiologists - Get all audiologists with optional practice_id filter
   app.fastify.get(
     '/api/audiologists',

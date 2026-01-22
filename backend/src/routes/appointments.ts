@@ -28,32 +28,6 @@ export function registerAppointmentRoutes(app: App) {
             },
           },
         },
-        response: {
-          200: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                patient_name: { type: 'string' },
-                patient_email: { type: ['string', 'null'] },
-                patient_phone: { type: ['string', 'null'] },
-                audiologist: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    full_name: { type: 'string' },
-                  },
-                },
-                appointment_date: { type: 'string' },
-                duration_minutes: { type: 'integer' },
-                status: { type: 'string' },
-                notes: { type: ['string', 'null'] },
-                created_at: { type: 'string' },
-              },
-            },
-          },
-        },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -97,39 +71,104 @@ export function registerAppointmentRoutes(app: App) {
         const appointments = await app.db
           .select({
             id: schema.appointments.id,
-            patientName: schema.appointments.patientName,
-            patientEmail: schema.appointments.patientEmail,
-            patientPhone: schema.appointments.patientPhone,
+            clientId: schema.clients.id,
+            clientName: schema.clients.name,
+            clientEmail: schema.clients.email,
+            clientPhone: schema.clients.phone,
+            branchId: schema.branches.id,
+            branchName: schema.branches.name,
+            branchAddress: schema.branches.address,
+            procedureId: schema.procedures.id,
+            procedureName: schema.procedures.name,
+            procedureDuration: schema.procedures.durationMinutes,
             audiologistId: schema.audiologists.id,
             audiologistName: schema.user.name,
+            assistantId: schema.appointments.assistantId,
             appointmentDate: schema.appointments.appointmentDate,
             durationMinutes: schema.appointments.durationMinutes,
             status: schema.appointments.status,
+            sendReminders: schema.appointments.sendReminders,
+            isRecurring: schema.appointments.isRecurring,
+            recurrencePattern: schema.appointments.recurrencePattern,
             notes: schema.appointments.notes,
             createdAt: schema.appointments.createdAt,
           })
           .from(schema.appointments)
+          .innerJoin(schema.clients, eq(schema.appointments.clientId, schema.clients.id))
+          .innerJoin(schema.branches, eq(schema.appointments.branchId, schema.branches.id))
+          .innerJoin(schema.procedures, eq(schema.appointments.procedureId, schema.procedures.id))
           .innerJoin(schema.audiologists, eq(schema.appointments.audiologistId, schema.audiologists.id))
           .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
           .where(whereCondition);
 
         app.logger.info({ count: appointments.length }, 'Appointments fetched successfully');
 
-        return appointments.map((a) => ({
-          id: a.id,
-          patient_name: a.patientName,
-          patient_email: a.patientEmail,
-          patient_phone: a.patientPhone,
-          audiologist: {
-            id: a.audiologistId,
-            full_name: a.audiologistName,
-          },
-          appointment_date: a.appointmentDate?.toISOString() || null,
-          duration_minutes: a.durationMinutes,
-          status: a.status,
-          notes: a.notes,
-          created_at: a.createdAt?.toISOString() || null,
-        }));
+        // Fetch assistant details if needed
+        const appointmentIds = appointments.map((a) => a.id);
+        let assistantMap: Map<string, { id: string; fullName: string }> = new Map();
+
+        if (appointmentIds.length > 0) {
+          const assistantAppointments = appointments.filter((a) => a.assistantId);
+          if (assistantAppointments.length > 0) {
+            const assistantIds = [...new Set(assistantAppointments.map((a) => a.assistantId))];
+            const assistants = await app.db
+              .select({
+                id: schema.audiologists.id,
+                fullName: schema.user.name,
+              })
+              .from(schema.audiologists)
+              .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
+              .where(inArray(schema.audiologists.id, assistantIds as any));
+
+            assistants.forEach((a) => {
+              assistantMap.set(a.id, { id: a.id, fullName: a.fullName });
+            });
+          }
+        }
+
+        return appointments.map((a) => {
+          const result: any = {
+            id: a.id,
+            client: {
+              id: a.clientId,
+              name: a.clientName,
+              email: a.clientEmail,
+              phone: a.clientPhone,
+            },
+            branch: {
+              id: a.branchId,
+              name: a.branchName,
+              address: a.branchAddress,
+            },
+            procedure: {
+              id: a.procedureId,
+              name: a.procedureName,
+              duration_minutes: a.procedureDuration,
+            },
+            audiologist: {
+              id: a.audiologistId,
+              full_name: a.audiologistName,
+            },
+            appointment_date: a.appointmentDate?.toISOString() || null,
+            duration_minutes: a.durationMinutes,
+            status: a.status,
+            send_reminders: a.sendReminders,
+            is_recurring: a.isRecurring,
+            recurrence_pattern: a.recurrencePattern,
+            notes: a.notes,
+            created_at: a.createdAt?.toISOString() || null,
+          };
+
+          if (a.assistantId && assistantMap.has(a.assistantId)) {
+            const assistant = assistantMap.get(a.assistantId)!;
+            result.assistant = {
+              id: assistant.id,
+              full_name: assistant.fullName,
+            };
+          }
+
+          return result;
+        });
       } catch (error) {
         app.logger.error(
           { err: error, audiologist_ids, start_date, end_date, status },
@@ -154,29 +193,6 @@ export function registerAppointmentRoutes(app: App) {
           },
           required: ['id'],
         },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              patient_name: { type: 'string' },
-              patient_email: { type: ['string', 'null'] },
-              patient_phone: { type: ['string', 'null'] },
-              audiologist: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  full_name: { type: 'string' },
-                },
-              },
-              appointment_date: { type: 'string' },
-              duration_minutes: { type: 'integer' },
-              status: { type: 'string' },
-              notes: { type: ['string', 'null'] },
-              created_at: { type: 'string' },
-            },
-          },
-        },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -191,18 +207,32 @@ export function registerAppointmentRoutes(app: App) {
         const appointment = await app.db
           .select({
             id: schema.appointments.id,
-            patientName: schema.appointments.patientName,
-            patientEmail: schema.appointments.patientEmail,
-            patientPhone: schema.appointments.patientPhone,
+            clientId: schema.clients.id,
+            clientName: schema.clients.name,
+            clientEmail: schema.clients.email,
+            clientPhone: schema.clients.phone,
+            branchId: schema.branches.id,
+            branchName: schema.branches.name,
+            branchAddress: schema.branches.address,
+            procedureId: schema.procedures.id,
+            procedureName: schema.procedures.name,
+            procedureDuration: schema.procedures.durationMinutes,
             audiologistId: schema.audiologists.id,
             audiologistName: schema.user.name,
+            assistantId: schema.appointments.assistantId,
             appointmentDate: schema.appointments.appointmentDate,
             durationMinutes: schema.appointments.durationMinutes,
             status: schema.appointments.status,
+            sendReminders: schema.appointments.sendReminders,
+            isRecurring: schema.appointments.isRecurring,
+            recurrencePattern: schema.appointments.recurrencePattern,
             notes: schema.appointments.notes,
             createdAt: schema.appointments.createdAt,
           })
           .from(schema.appointments)
+          .innerJoin(schema.clients, eq(schema.appointments.clientId, schema.clients.id))
+          .innerJoin(schema.branches, eq(schema.appointments.branchId, schema.branches.id))
+          .innerJoin(schema.procedures, eq(schema.appointments.procedureId, schema.procedures.id))
           .innerJoin(schema.audiologists, eq(schema.appointments.audiologistId, schema.audiologists.id))
           .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
           .where(eq(schema.appointments.id, id as any))
@@ -213,25 +243,66 @@ export function registerAppointmentRoutes(app: App) {
           return reply.code(404).send({ error: 'Appointment not found' });
         }
 
-        const result = appointment[0];
+        const a = appointment[0];
+
+        let assistantName: string | undefined = undefined;
+        if (a.assistantId) {
+          const assistant = await app.db
+            .select({
+              fullName: schema.user.name,
+            })
+            .from(schema.audiologists)
+            .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
+            .where(eq(schema.audiologists.id, a.assistantId))
+            .limit(1);
+
+          if (assistant.length > 0) {
+            assistantName = assistant[0].fullName;
+          }
+        }
 
         app.logger.info({ appointmentId: id }, 'Appointment fetched successfully');
 
-        return {
-          id: result.id,
-          patient_name: result.patientName,
-          patient_email: result.patientEmail,
-          patient_phone: result.patientPhone,
-          audiologist: {
-            id: result.audiologistId,
-            full_name: result.audiologistName,
+        const result: any = {
+          id: a.id,
+          client: {
+            id: a.clientId,
+            name: a.clientName,
+            email: a.clientEmail,
+            phone: a.clientPhone,
           },
-          appointment_date: result.appointmentDate?.toISOString() || null,
-          duration_minutes: result.durationMinutes,
-          status: result.status,
-          notes: result.notes,
-          created_at: result.createdAt?.toISOString() || null,
+          branch: {
+            id: a.branchId,
+            name: a.branchName,
+            address: a.branchAddress,
+          },
+          procedure: {
+            id: a.procedureId,
+            name: a.procedureName,
+            duration_minutes: a.procedureDuration,
+          },
+          audiologist: {
+            id: a.audiologistId,
+            full_name: a.audiologistName,
+          },
+          appointment_date: a.appointmentDate?.toISOString() || null,
+          duration_minutes: a.durationMinutes,
+          status: a.status,
+          send_reminders: a.sendReminders,
+          is_recurring: a.isRecurring,
+          recurrence_pattern: a.recurrencePattern,
+          notes: a.notes,
+          created_at: a.createdAt?.toISOString() || null,
         };
+
+        if (a.assistantId && assistantName) {
+          result.assistant = {
+            id: a.assistantId,
+            full_name: assistantName,
+          };
+        }
+
+        return result;
       } catch (error) {
         app.logger.error({ err: error, appointmentId: id }, 'Failed to fetch appointment');
         throw error;
@@ -248,38 +319,28 @@ export function registerAppointmentRoutes(app: App) {
         tags: ['appointments'],
         body: {
           type: 'object',
-          required: ['patient_name', 'audiologist_id', 'appointment_date'],
+          required: [
+            'client_id',
+            'branch_id',
+            'procedure_id',
+            'audiologist_id',
+            'appointment_date',
+            'duration_minutes',
+            'send_reminders',
+            'is_recurring',
+          ],
           properties: {
-            patient_name: { type: 'string' },
-            patient_email: { type: ['string', 'null'] },
-            patient_phone: { type: ['string', 'null'] },
+            client_id: { type: 'string' },
+            branch_id: { type: 'string' },
+            procedure_id: { type: 'string' },
             audiologist_id: { type: 'string' },
-            appointment_date: { type: 'string', description: 'ISO date string' },
+            assistant_id: { type: ['string', 'null'] },
+            appointment_date: { type: 'string' },
             duration_minutes: { type: 'integer' },
+            send_reminders: { type: 'boolean' },
+            is_recurring: { type: 'boolean' },
+            recurrence_pattern: { type: ['string', 'null'] },
             notes: { type: ['string', 'null'] },
-          },
-        },
-        response: {
-          201: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              patient_name: { type: 'string' },
-              patient_email: { type: ['string', 'null'] },
-              patient_phone: { type: ['string', 'null'] },
-              audiologist: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  full_name: { type: 'string' },
-                },
-              },
-              appointment_date: { type: 'string' },
-              duration_minutes: { type: 'integer' },
-              status: { type: 'string' },
-              notes: { type: ['string', 'null'] },
-              created_at: { type: 'string' },
-            },
           },
         },
       },
@@ -289,73 +350,143 @@ export function registerAppointmentRoutes(app: App) {
       if (!session) return;
 
       const {
-        patient_name,
-        patient_email,
-        patient_phone,
+        client_id,
+        branch_id,
+        procedure_id,
         audiologist_id,
+        assistant_id,
         appointment_date,
         duration_minutes,
+        send_reminders,
+        is_recurring,
+        recurrence_pattern,
         notes,
       } = request.body as {
-        patient_name: string;
-        patient_email?: string;
-        patient_phone?: string;
+        client_id: string;
+        branch_id: string;
+        procedure_id: string;
         audiologist_id: string;
+        assistant_id?: string | null;
         appointment_date: string;
-        duration_minutes?: number;
-        notes?: string;
+        duration_minutes: number;
+        send_reminders: boolean;
+        is_recurring: boolean;
+        recurrence_pattern?: string | null;
+        notes?: string | null;
       };
 
       app.logger.info(
-        { patient_name, audiologist_id, appointment_date },
+        { client_id, branch_id, procedure_id, audiologist_id, appointment_date },
         'Creating appointment'
       );
 
       try {
-        // Verify audiologist exists
-        const audiologistExists = await app.db
-          .select({ id: schema.audiologists.id })
-          .from(schema.audiologists)
-          .where(eq(schema.audiologists.id, audiologist_id as any))
-          .limit(1);
+        // Verify all foreign keys exist
+        const [clientExists, branchExists, procedureExists, audiologistExists] =
+          await Promise.all([
+            app.db
+              .select({ id: schema.clients.id })
+              .from(schema.clients)
+              .where(eq(schema.clients.id, client_id as any))
+              .limit(1),
+            app.db
+              .select({ id: schema.branches.id })
+              .from(schema.branches)
+              .where(eq(schema.branches.id, branch_id as any))
+              .limit(1),
+            app.db
+              .select({ id: schema.procedures.id })
+              .from(schema.procedures)
+              .where(eq(schema.procedures.id, procedure_id as any))
+              .limit(1),
+            app.db
+              .select({ id: schema.audiologists.id })
+              .from(schema.audiologists)
+              .where(eq(schema.audiologists.id, audiologist_id as any))
+              .limit(1),
+          ]);
 
-        if (audiologistExists.length === 0) {
+        if (!clientExists.length) {
+          app.logger.warn({ client_id }, 'Client not found');
+          return reply.code(404).send({ error: 'Client not found' });
+        }
+        if (!branchExists.length) {
+          app.logger.warn({ branch_id }, 'Branch not found');
+          return reply.code(404).send({ error: 'Branch not found' });
+        }
+        if (!procedureExists.length) {
+          app.logger.warn({ procedure_id }, 'Procedure not found');
+          return reply.code(404).send({ error: 'Procedure not found' });
+        }
+        if (!audiologistExists.length) {
           app.logger.warn({ audiologist_id }, 'Audiologist not found');
           return reply.code(404).send({ error: 'Audiologist not found' });
+        }
+
+        // Verify assistant if provided
+        if (assistant_id) {
+          const assistantExists = await app.db
+            .select({ id: schema.audiologists.id })
+            .from(schema.audiologists)
+            .where(eq(schema.audiologists.id, assistant_id as any))
+            .limit(1);
+
+          if (!assistantExists.length) {
+            app.logger.warn({ assistant_id }, 'Assistant not found');
+            return reply.code(404).send({ error: 'Assistant not found' });
+          }
         }
 
         // Create appointment
         const [newAppointment] = await app.db
           .insert(schema.appointments)
           .values({
-            patientName: patient_name,
-            patientEmail: patient_email || null,
-            patientPhone: patient_phone || null,
+            clientId: client_id as any,
+            branchId: branch_id as any,
+            procedureId: procedure_id as any,
             audiologistId: audiologist_id as any,
+            assistantId: assistant_id ? (assistant_id as any) : null,
             appointmentDate: new Date(appointment_date),
-            durationMinutes: duration_minutes || 60,
+            durationMinutes: duration_minutes,
             status: 'scheduled',
+            sendReminders: send_reminders,
+            isRecurring: is_recurring,
+            recurrencePattern: recurrence_pattern || null,
             notes: notes || null,
             createdBy: session.user.id,
           })
           .returning();
 
-        // Fetch full appointment details with audiologist info
+        // Fetch full appointment details
         const result = await app.db
           .select({
             id: schema.appointments.id,
-            patientName: schema.appointments.patientName,
-            patientEmail: schema.appointments.patientEmail,
-            patientPhone: schema.appointments.patientPhone,
+            clientId: schema.clients.id,
+            clientName: schema.clients.name,
+            clientEmail: schema.clients.email,
+            clientPhone: schema.clients.phone,
+            branchId: schema.branches.id,
+            branchName: schema.branches.name,
+            branchAddress: schema.branches.address,
+            procedureId: schema.procedures.id,
+            procedureName: schema.procedures.name,
+            procedureDuration: schema.procedures.durationMinutes,
             audiologistId: schema.audiologists.id,
             audiologistName: schema.user.name,
+            assistantId: schema.appointments.assistantId,
             appointmentDate: schema.appointments.appointmentDate,
             durationMinutes: schema.appointments.durationMinutes,
             status: schema.appointments.status,
+            sendReminders: schema.appointments.sendReminders,
+            isRecurring: schema.appointments.isRecurring,
+            recurrencePattern: schema.appointments.recurrencePattern,
             notes: schema.appointments.notes,
             createdAt: schema.appointments.createdAt,
           })
           .from(schema.appointments)
+          .innerJoin(schema.clients, eq(schema.appointments.clientId, schema.clients.id))
+          .innerJoin(schema.branches, eq(schema.appointments.branchId, schema.branches.id))
+          .innerJoin(schema.procedures, eq(schema.appointments.procedureId, schema.procedures.id))
           .innerJoin(schema.audiologists, eq(schema.appointments.audiologistId, schema.audiologists.id))
           .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
           .where(eq(schema.appointments.id, newAppointment.id))
@@ -365,29 +496,78 @@ export function registerAppointmentRoutes(app: App) {
           throw new Error('Failed to retrieve created appointment');
         }
 
-        const appointment = result[0];
+        const a = result[0];
+
+        let assistantName: string | undefined = undefined;
+        if (a.assistantId) {
+          const assistant = await app.db
+            .select({
+              fullName: schema.user.name,
+            })
+            .from(schema.audiologists)
+            .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
+            .where(eq(schema.audiologists.id, a.assistantId))
+            .limit(1);
+
+          if (assistant.length > 0) {
+            assistantName = assistant[0].fullName;
+          }
+        }
 
         app.logger.info({ appointmentId: newAppointment.id }, 'Appointment created successfully');
 
         reply.code(201);
-        return {
-          id: appointment.id,
-          patient_name: appointment.patientName,
-          patient_email: appointment.patientEmail,
-          patient_phone: appointment.patientPhone,
-          audiologist: {
-            id: appointment.audiologistId,
-            full_name: appointment.audiologistName,
+
+        const responseData: any = {
+          id: a.id,
+          client: {
+            id: a.clientId,
+            name: a.clientName,
+            email: a.clientEmail,
+            phone: a.clientPhone,
           },
-          appointment_date: appointment.appointmentDate?.toISOString() || null,
-          duration_minutes: appointment.durationMinutes,
-          status: appointment.status,
-          notes: appointment.notes,
-          created_at: appointment.createdAt?.toISOString() || null,
+          branch: {
+            id: a.branchId,
+            name: a.branchName,
+            address: a.branchAddress,
+          },
+          procedure: {
+            id: a.procedureId,
+            name: a.procedureName,
+            duration_minutes: a.procedureDuration,
+          },
+          audiologist: {
+            id: a.audiologistId,
+            full_name: a.audiologistName,
+          },
+          appointment_date: a.appointmentDate?.toISOString() || null,
+          duration_minutes: a.durationMinutes,
+          status: a.status,
+          send_reminders: a.sendReminders,
+          is_recurring: a.isRecurring,
+          recurrence_pattern: a.recurrencePattern,
+          notes: a.notes,
+          created_at: a.createdAt?.toISOString() || null,
         };
+
+        if (a.assistantId && assistantName) {
+          responseData.assistant = {
+            id: a.assistantId,
+            full_name: assistantName,
+          };
+        }
+
+        return responseData;
       } catch (error) {
         app.logger.error(
-          { err: error, patient_name, audiologist_id, appointment_date },
+          {
+            err: error,
+            client_id,
+            branch_id,
+            procedure_id,
+            audiologist_id,
+            appointment_date,
+          },
           'Failed to create appointment'
         );
         throw error;
@@ -412,40 +592,21 @@ export function registerAppointmentRoutes(app: App) {
         body: {
           type: 'object',
           properties: {
-            patient_name: { type: 'string' },
-            patient_email: { type: ['string', 'null'] },
-            patient_phone: { type: ['string', 'null'] },
+            client_id: { type: 'string' },
+            branch_id: { type: 'string' },
+            procedure_id: { type: 'string' },
             audiologist_id: { type: 'string' },
+            assistant_id: { type: ['string', 'null'] },
             appointment_date: { type: 'string' },
             duration_minutes: { type: 'integer' },
             status: {
               type: 'string',
               enum: ['scheduled', 'completed', 'cancelled', 'no-show'],
             },
+            send_reminders: { type: 'boolean' },
+            is_recurring: { type: 'boolean' },
+            recurrence_pattern: { type: ['string', 'null'] },
             notes: { type: ['string', 'null'] },
-          },
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              patient_name: { type: 'string' },
-              patient_email: { type: ['string', 'null'] },
-              patient_phone: { type: ['string', 'null'] },
-              audiologist: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  full_name: { type: 'string' },
-                },
-              },
-              appointment_date: { type: 'string' },
-              duration_minutes: { type: 'integer' },
-              status: { type: 'string' },
-              notes: { type: ['string', 'null'] },
-              created_at: { type: 'string' },
-            },
           },
         },
       },
@@ -456,23 +617,31 @@ export function registerAppointmentRoutes(app: App) {
 
       const { id } = request.params as { id: string };
       const {
-        patient_name,
-        patient_email,
-        patient_phone,
+        client_id,
+        branch_id,
+        procedure_id,
         audiologist_id,
+        assistant_id,
         appointment_date,
         duration_minutes,
         status,
+        send_reminders,
+        is_recurring,
+        recurrence_pattern,
         notes,
       } = request.body as {
-        patient_name?: string;
-        patient_email?: string;
-        patient_phone?: string;
+        client_id?: string;
+        branch_id?: string;
+        procedure_id?: string;
         audiologist_id?: string;
+        assistant_id?: string | null;
         appointment_date?: string;
         duration_minutes?: number;
         status?: string;
-        notes?: string;
+        send_reminders?: boolean;
+        is_recurring?: boolean;
+        recurrence_pattern?: string | null;
+        notes?: string | null;
       };
 
       app.logger.info({ appointmentId: id }, 'Updating appointment');
@@ -490,31 +659,81 @@ export function registerAppointmentRoutes(app: App) {
           return reply.code(404).send({ error: 'Appointment not found' });
         }
 
-        // Verify audiologist if provided
+        // Verify foreign keys if provided
+        if (client_id) {
+          const clientExists = await app.db
+            .select({ id: schema.clients.id })
+            .from(schema.clients)
+            .where(eq(schema.clients.id, client_id as any))
+            .limit(1);
+          if (!clientExists.length) {
+            app.logger.warn({ client_id }, 'Client not found');
+            return reply.code(404).send({ error: 'Client not found' });
+          }
+        }
+
+        if (branch_id) {
+          const branchExists = await app.db
+            .select({ id: schema.branches.id })
+            .from(schema.branches)
+            .where(eq(schema.branches.id, branch_id as any))
+            .limit(1);
+          if (!branchExists.length) {
+            app.logger.warn({ branch_id }, 'Branch not found');
+            return reply.code(404).send({ error: 'Branch not found' });
+          }
+        }
+
+        if (procedure_id) {
+          const procedureExists = await app.db
+            .select({ id: schema.procedures.id })
+            .from(schema.procedures)
+            .where(eq(schema.procedures.id, procedure_id as any))
+            .limit(1);
+          if (!procedureExists.length) {
+            app.logger.warn({ procedure_id }, 'Procedure not found');
+            return reply.code(404).send({ error: 'Procedure not found' });
+          }
+        }
+
         if (audiologist_id) {
           const audiologistExists = await app.db
             .select({ id: schema.audiologists.id })
             .from(schema.audiologists)
             .where(eq(schema.audiologists.id, audiologist_id as any))
             .limit(1);
-
-          if (audiologistExists.length === 0) {
+          if (!audiologistExists.length) {
             app.logger.warn({ audiologist_id }, 'Audiologist not found');
             return reply.code(404).send({ error: 'Audiologist not found' });
+          }
+        }
+
+        if (assistant_id) {
+          const assistantExists = await app.db
+            .select({ id: schema.audiologists.id })
+            .from(schema.audiologists)
+            .where(eq(schema.audiologists.id, assistant_id as any))
+            .limit(1);
+          if (!assistantExists.length) {
+            app.logger.warn({ assistant_id }, 'Assistant not found');
+            return reply.code(404).send({ error: 'Assistant not found' });
           }
         }
 
         // Prepare update data
         const updateData: any = {};
 
-        if (patient_name !== undefined) updateData.patientName = patient_name;
-        if (patient_email !== undefined) updateData.patientEmail = patient_email;
-        if (patient_phone !== undefined) updateData.patientPhone = patient_phone;
+        if (client_id !== undefined) updateData.clientId = client_id as any;
+        if (branch_id !== undefined) updateData.branchId = branch_id as any;
+        if (procedure_id !== undefined) updateData.procedureId = procedure_id as any;
         if (audiologist_id !== undefined) updateData.audiologistId = audiologist_id as any;
-        if (appointment_date !== undefined)
-          updateData.appointmentDate = new Date(appointment_date);
+        if (assistant_id !== undefined) updateData.assistantId = assistant_id ? (assistant_id as any) : null;
+        if (appointment_date !== undefined) updateData.appointmentDate = new Date(appointment_date);
         if (duration_minutes !== undefined) updateData.durationMinutes = duration_minutes;
         if (status !== undefined) updateData.status = status;
+        if (send_reminders !== undefined) updateData.sendReminders = send_reminders;
+        if (is_recurring !== undefined) updateData.isRecurring = is_recurring;
+        if (recurrence_pattern !== undefined) updateData.recurrencePattern = recurrence_pattern;
         if (notes !== undefined) updateData.notes = notes;
 
         // Update appointment
@@ -527,18 +746,32 @@ export function registerAppointmentRoutes(app: App) {
         const result = await app.db
           .select({
             id: schema.appointments.id,
-            patientName: schema.appointments.patientName,
-            patientEmail: schema.appointments.patientEmail,
-            patientPhone: schema.appointments.patientPhone,
+            clientId: schema.clients.id,
+            clientName: schema.clients.name,
+            clientEmail: schema.clients.email,
+            clientPhone: schema.clients.phone,
+            branchId: schema.branches.id,
+            branchName: schema.branches.name,
+            branchAddress: schema.branches.address,
+            procedureId: schema.procedures.id,
+            procedureName: schema.procedures.name,
+            procedureDuration: schema.procedures.durationMinutes,
             audiologistId: schema.audiologists.id,
             audiologistName: schema.user.name,
+            assistantId: schema.appointments.assistantId,
             appointmentDate: schema.appointments.appointmentDate,
             durationMinutes: schema.appointments.durationMinutes,
             status: schema.appointments.status,
+            sendReminders: schema.appointments.sendReminders,
+            isRecurring: schema.appointments.isRecurring,
+            recurrencePattern: schema.appointments.recurrencePattern,
             notes: schema.appointments.notes,
             createdAt: schema.appointments.createdAt,
           })
           .from(schema.appointments)
+          .innerJoin(schema.clients, eq(schema.appointments.clientId, schema.clients.id))
+          .innerJoin(schema.branches, eq(schema.appointments.branchId, schema.branches.id))
+          .innerJoin(schema.procedures, eq(schema.appointments.procedureId, schema.procedures.id))
           .innerJoin(schema.audiologists, eq(schema.appointments.audiologistId, schema.audiologists.id))
           .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
           .where(eq(schema.appointments.id, id as any))
@@ -548,25 +781,66 @@ export function registerAppointmentRoutes(app: App) {
           throw new Error('Failed to retrieve updated appointment');
         }
 
-        const appointment = result[0];
+        const a = result[0];
+
+        let assistantName: string | undefined = undefined;
+        if (a.assistantId) {
+          const assistant = await app.db
+            .select({
+              fullName: schema.user.name,
+            })
+            .from(schema.audiologists)
+            .innerJoin(schema.user, eq(schema.audiologists.userId, schema.user.id))
+            .where(eq(schema.audiologists.id, a.assistantId))
+            .limit(1);
+
+          if (assistant.length > 0) {
+            assistantName = assistant[0].fullName;
+          }
+        }
 
         app.logger.info({ appointmentId: id }, 'Appointment updated successfully');
 
-        return {
-          id: appointment.id,
-          patient_name: appointment.patientName,
-          patient_email: appointment.patientEmail,
-          patient_phone: appointment.patientPhone,
-          audiologist: {
-            id: appointment.audiologistId,
-            full_name: appointment.audiologistName,
+        const responseData: any = {
+          id: a.id,
+          client: {
+            id: a.clientId,
+            name: a.clientName,
+            email: a.clientEmail,
+            phone: a.clientPhone,
           },
-          appointment_date: appointment.appointmentDate?.toISOString() || null,
-          duration_minutes: appointment.durationMinutes,
-          status: appointment.status,
-          notes: appointment.notes,
-          created_at: appointment.createdAt?.toISOString() || null,
+          branch: {
+            id: a.branchId,
+            name: a.branchName,
+            address: a.branchAddress,
+          },
+          procedure: {
+            id: a.procedureId,
+            name: a.procedureName,
+            duration_minutes: a.procedureDuration,
+          },
+          audiologist: {
+            id: a.audiologistId,
+            full_name: a.audiologistName,
+          },
+          appointment_date: a.appointmentDate?.toISOString() || null,
+          duration_minutes: a.durationMinutes,
+          status: a.status,
+          send_reminders: a.sendReminders,
+          is_recurring: a.isRecurring,
+          recurrence_pattern: a.recurrencePattern,
+          notes: a.notes,
+          created_at: a.createdAt?.toISOString() || null,
         };
+
+        if (a.assistantId && assistantName) {
+          responseData.assistant = {
+            id: a.assistantId,
+            full_name: assistantName,
+          };
+        }
+
+        return responseData;
       } catch (error) {
         app.logger.error({ err: error, appointmentId: id }, 'Failed to update appointment');
         throw error;
