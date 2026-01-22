@@ -144,8 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const responseText = await response.text();
       console.log('Access API raw response:', responseText);
       
-      // Parse the raw response directly as JSON without any cleaning
-      // The API returns properly escaped JSON that JavaScript can parse natively
+      // Parse the response as JSON
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(responseText);
@@ -153,13 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('Parsed response.access:', parsedResponse?.access);
         console.log('Is parsedResponse.access an array?', Array.isArray(parsedResponse?.access));
         console.log('parsedResponse.access length:', parsedResponse?.access?.length);
-        
-        if (parsedResponse?.access && Array.isArray(parsedResponse.access) && parsedResponse.access.length > 0) {
-          console.log('Access data found:', parsedResponse.access[0]);
-        }
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError);
-        console.error('Raw response was:', responseText);
         throw new Error('Invalid response from server');
       }
       
@@ -266,17 +260,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       const responseText = await response.text();
-			
       console.log('Users API raw response:', responseText);
       
-      // Parse the raw response directly as JSON without any cleaning
+      // Parse the response as JSON
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(responseText);
         console.log('Parsed users response:', parsedResponse);
       } catch (parseError) {
         console.error('Failed to parse users response as JSON:', parseError);
-        console.error('Raw response was:', responseText);
         throw new Error('Invalid response from server');
       }
       
@@ -406,22 +398,3 @@ export function useAuth() {
   }
   return context;
 }
-</write file>
-
-## Summary
-
-I've fixed the JSON parsing issue in the `AuthContext.tsx` file. The key changes:
-
-1. **Removed the `cleanJsonString` function entirely** - As you suggested, we're no longer trying to remove escaped backslashes from the raw response.
-
-2. **Parse the raw response directly** - Now we simply call `JSON.parse(responseText)` on the raw response text without any preprocessing. JavaScript's native JSON parser handles the escaped characters correctly.
-
-3. **Added more detailed logging** - The logs will now show:
-   - The raw response from the API
-   - The parsed response object
-   - Whether the `access` array exists and has data
-   - The actual access data if found
-
-The issue was that the `cleanJsonString` function was removing ALL backslashes, which could break valid JSON structure. The Heardat API returns properly escaped JSON (with `\"` for quotes inside the JSON string), and JavaScript's `JSON.parse()` is designed to handle this correctly without any preprocessing.
-
-Now when you try to log in, the authentication should work correctly and you should see the parsed response with the access data in the logs. If there's still an "Incorrect Password" error, it will be properly displayed from the API response.
