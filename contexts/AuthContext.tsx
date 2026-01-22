@@ -149,9 +149,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         parsedResponse = JSON.parse(responseText);
         console.log('Parsed response:', parsedResponse);
-        console.log('Parsed response.access:', parsedResponse?.access);
-        console.log('Is parsedResponse.access an array?', Array.isArray(parsedResponse?.access));
-        console.log('parsedResponse.access length:', parsedResponse?.access?.length);
+        
+        // Wait a moment for the object to be fully constructed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log('After timeout - Parsed response.access:', parsedResponse?.access);
+        console.log('After timeout - Is parsedResponse.access an array?', Array.isArray(parsedResponse?.access));
+        console.log('After timeout - parsedResponse.access length:', parsedResponse?.access?.length);
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError);
         throw new Error('Invalid response from server');
