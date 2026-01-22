@@ -16,18 +16,48 @@ export interface Audiologist {
   is_active: boolean;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  address?: string;
+}
+
+export interface Procedure {
+  id: string;
+  name: string;
+  description?: string;
+  duration_minutes: number;
+}
+
 export interface Appointment {
   id: string;
   patient_name: string;
   patient_email?: string;
   patient_phone?: string;
+  client?: Client;
+  branch?: Branch;
+  procedure?: Procedure;
   audiologist: {
+    id: string;
+    full_name: string;
+  };
+  assistant?: {
     id: string;
     full_name: string;
   };
   appointment_date: string;
   duration_minutes: number;
   status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
+  send_reminders?: boolean;
+  is_recurring?: boolean;
+  recurrence_pattern?: string;
   notes?: string;
   created_at: string;
 }

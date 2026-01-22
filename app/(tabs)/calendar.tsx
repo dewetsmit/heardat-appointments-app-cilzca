@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { AudiologistSelector } from '@/components/AudiologistSelector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +22,7 @@ import { Appointment } from '@/types';
 
 export default function CalendarScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { token } = useAuth();
   const { selectedAudiologistIds } = useAppointments();
 
@@ -280,6 +282,22 @@ export default function CalendarScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        onPress={() => {
+          console.log('Create appointment button pressed');
+          router.push('/create-appointment');
+        }}
+      >
+        <IconSymbol
+          ios_icon_name="plus"
+          android_material_icon_name="add"
+          size={28}
+          color="#FFFFFF"
+        />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -411,5 +429,20 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: Platform.OS === 'ios' ? 100 : 90,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

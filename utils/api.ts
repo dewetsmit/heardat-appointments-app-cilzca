@@ -220,3 +220,25 @@ export const authenticatedDelete = async <T = any>(endpoint: string, data: any =
     body: JSON.stringify(data),
   });
 };
+
+/**
+ * Legacy helper function for backward compatibility
+ * @deprecated Use authenticatedApiCall instead
+ */
+export const apiRequest = async <T = any>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> => {
+  return authenticatedApiCall<T>(endpoint, options);
+};
+
+/**
+ * Legacy helper function to get auth header
+ * @deprecated Token is now automatically retrieved from storage
+ */
+export const getAuthHeader = (token?: string) => {
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+};

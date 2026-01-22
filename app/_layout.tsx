@@ -116,6 +116,13 @@ function RootLayoutNav() {
                 <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
                 <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen 
+                  name="create-appointment" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Create Appointment',
+                  }} 
+                />
               </Stack>
               <SystemBars style={"auto"} />
             </GestureHandlerRootView>
