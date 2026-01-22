@@ -266,7 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       const responseText = await response.text();
-			console.log(response)
+			console.log(response);
       console.log('Users API raw response:', responseText);
       
       // Parse the raw response directly as JSON without any cleaning
