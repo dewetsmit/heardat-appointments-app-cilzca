@@ -149,16 +149,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         parsedResponse = JSON.parse(responseText);
         console.log('Parsed response:', parsedResponse);
+        console.log('Parsed response.access:', parsedResponse?.access);
+        console.log('Is parsedResponse.access an array?', Array.isArray(parsedResponse?.access));
+        console.log('parsedResponse.access length:', parsedResponse?.access?.length);
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError);
         throw new Error('Invalid response from server');
       }
       
       // Check if access array exists and has items
+      console.log('Checking access data...');
+      console.log('  - parsedResponse.access exists?', !!parsedResponse.access);
+      console.log('  - Is array?', Array.isArray(parsedResponse.access));
+      console.log('  - Has items?', parsedResponse.access?.length > 0);
+      
       if (!parsedResponse.access || !Array.isArray(parsedResponse.access) || parsedResponse.access.length === 0) {
         console.error('No access data in response:', parsedResponse);
         throw new Error('Invalid username or password');
       }
+      
+      console.log('Access data validation passed!');
       
       // Get the first access item
       const accessData = parsedResponse.access[0];
