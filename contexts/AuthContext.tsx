@@ -164,10 +164,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const accessData = parsedResponse.access[0];
       console.log('Access data:', accessData);
       
-      // Check for SessionKey and UserKey to determine if auth is successful
+      // Check the Error field - if it says "SUCCESS", authentication is successful
+      if (accessData.Error !== 'SUCCESS') {
+        console.error('Authentication failed. Error field:', accessData.Error);
+        throw new Error(accessData.Error || 'Authentication failed - invalid credentials');
+      }
+      
+      // Verify SessionKey and UserKey exist
       if (!accessData.SessionKey || !accessData.UserKey) {
         console.error('Missing SessionKey or UserKey in access data:', accessData);
-        throw new Error('Authentication failed - invalid credentials');
+        throw new Error('Authentication failed - missing session data');
       }
       
       const sessionKeyValue = accessData.SessionKey;
