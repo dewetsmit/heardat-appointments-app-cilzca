@@ -64,6 +64,15 @@ async function getUserIP(): Promise<string> {
   }
 }
 
+// Helper to clean escaped JSON strings
+function cleanJsonString(rawText: string): string {
+  // Remove escaped backslashes from the response
+  // This handles cases like "{\"access\":[...]}" -> "{"access":[...]}"
+  let cleaned = rawText.replace(/\\/g, '');
+  console.log('Cleaned JSON string:', cleaned);
+  return cleaned;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -144,16 +153,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const responseText = await response.text();
       console.log('Access API raw response:', responseText);
       
-      // Parse the response as JSON
+      // Clean the response by removing escaped backslashes
+      const cleanedResponse = cleanJsonString(responseText);
+      
+      // Parse the cleaned response as JSON
       let parsedResponse;
       try {
-        parsedResponse = JSON.parse(responseText);
-        console.log('Parsed response:', parsedResponse);
+        parsedResponse = JSON.parse(cleanedResponse);
+        console.log('Parsed response after cleaning:', parsedResponse);
         console.log('Parsed response.access:', parsedResponse?.access);
         console.log('Is parsedResponse.access an array?', Array.isArray(parsedResponse?.access));
         console.log('parsedResponse.access length:', parsedResponse?.access?.length);
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError);
+        console.error('Cleaned response was:', cleanedResponse);
         throw new Error('Invalid response from server');
       }
       
@@ -262,13 +275,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const responseText = await response.text();
       console.log('Users API raw response:', responseText);
       
-      // Parse the response as JSON
+      // Clean the response by removing escaped backslashes
+      const cleanedResponse = cleanJsonString(responseText);
+      
+      // Parse the cleaned response as JSON
       let parsedResponse;
       try {
-        parsedResponse = JSON.parse(responseText);
-        console.log('Parsed users response:', parsedResponse);
+        parsedResponse = JSON.parse(cleanedResponse);
+        console.log('Parsed users response after cleaning:', parsedResponse);
       } catch (parseError) {
         console.error('Failed to parse users response as JSON:', parseError);
+        console.error('Cleaned response was:', cleanedResponse);
         throw new Error('Invalid response from server');
       }
       
