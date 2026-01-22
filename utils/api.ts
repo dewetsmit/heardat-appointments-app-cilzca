@@ -1,13 +1,18 @@
+
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import { BEARER_TOKEN_KEY } from "@/lib/auth";
 
 /**
  * Backend URL is configured in app.json under expo.extra.backendUrl
  * It is set automatically when the backend is deployed
  */
 export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || "";
+
+/**
+ * Heardat API configuration
+ */
+export const HEARDAT_API_URL = "https://www.heardatonline.co.za/api";
 
 /**
  * Check if backend is properly configured
@@ -17,19 +22,69 @@ export const isBackendConfigured = (): boolean => {
 };
 
 /**
- * Get bearer token from platform-specific storage
- * Web: localStorage
- * Native: SecureStore
- *
- * @returns Bearer token or null if not found
+ * Platform-specific storage
+ */
+const storage = Platform.OS === "web"
+  ? {
+      getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+      setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
+      deleteItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
+    }
+  : {
+      getItem: (key: string) => SecureStore.getItemAsync(key),
+      setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+      deleteItem: (key: string) => SecureStore.deleteItemAsync(key),
+    };
+
+/**
+ * Get Heardat session credentials from storage
+ */
+export const getHeardatCredentials = async (): Promise<{
+  sessionKey: string | null;
+  userKey: string | null;
+  companyKey: string | null;
+  userId: string | null;
+}> => {
+  try {
+    const currentUserStr = await storage.getItem("CurrentUser");
+    const sessionKey = await storage.getItem("session_key");
+    const userKey = await storage.getItem("UserKey");
+    
+    if (currentUserStr) {
+      const currentUser = JSON.parse(currentUserStr);
+      return {
+        sessionKey: sessionKey || currentUser.SessionKey || null,
+        userKey: userKey || currentUser.UserKey || null,
+        companyKey: currentUser.CompanyKey || null,
+        userId: currentUser.UserID || null,
+      };
+    }
+    
+    return {
+      sessionKey,
+      userKey,
+      companyKey: null,
+      userId: null,
+    };
+  } catch (error) {
+    console.error("[API] Error retrieving Heardat credentials:", error);
+    return {
+      sessionKey: null,
+      userKey: null,
+      companyKey: null,
+      userId: null,
+    };
+  }
+};
+
+/**
+ * Get bearer token from platform-specific storage (for internal backend)
  */
 export const getBearerToken = async (): Promise<string | null> => {
   try {
-    if (Platform.OS === "web") {
-      return localStorage.getItem(BEARER_TOKEN_KEY);
-    } else {
-      return await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
-    }
+    const credentials = await getHeardatCredentials();
+    // Use session key as bearer token
+    return credentials.sessionKey;
   } catch (error) {
     console.error("[API] Error retrieving bearer token:", error);
     return null;
@@ -75,6 +130,57 @@ export const apiCall = async <T = any>(
     return data;
   } catch (error) {
     console.error("[API] Request failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * Heardat API call helper
+ * Automatically adds session credentials to query parameters
+ */
+export const heardatApiCall = async <T = any>(
+  endpoint: string,
+  additionalParams?: Record<string, string>
+): Promise<T> => {
+  const credentials = await getHeardatCredentials();
+  
+  if (!credentials.sessionKey || !credentials.userKey) {
+    throw new Error("Authentication required. Please sign in.");
+  }
+  
+  // Build query parameters with credentials
+  const params = new URLSearchParams({
+    Sessionkey: credentials.sessionKey,
+    Userkey: credentials.userKey,
+    Key: credentials.userKey,
+    ...(credentials.companyKey && { Companykey: credentials.companyKey }),
+    ...(credentials.userId && { UserID: credentials.userId }),
+    ...additionalParams,
+  });
+  
+  const url = `${HEARDAT_API_URL}/${endpoint}?${params.toString()}`;
+  console.log("[Heardat API] Calling:", endpoint);
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("[Heardat API] Error response:", response.status, text);
+      throw new Error(`Heardat API error: ${response.status}`);
+    }
+    
+    const responseText = await response.text();
+    const data = JSON.parse(responseText);
+    console.log("[Heardat API] Success");
+    return data;
+  } catch (error) {
+    console.error("[Heardat API] Request failed:", error);
     throw error;
   }
 };

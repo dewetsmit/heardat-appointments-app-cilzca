@@ -1,7 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
-import { authClient, storeWebBearerToken } from "@/lib/auth";
+import * as SecureStore from "expo-secure-store";
+import * as Network from "expo-network";
 
 interface User {
   id: string;
@@ -9,13 +10,22 @@ interface User {
   name?: string;
   full_name?: string;
   image?: string;
+  // Heardat specific fields
+  UserKey?: string;
+  SessionKey?: string;
+  CompanyKey?: string;
+  CompanyID?: string;
+  UserID?: string;
+  Username?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  sessionKey: string | null;
+  userKey: string | null;
   loading: boolean;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signInWithEmail: (username: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
@@ -26,52 +36,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function openOAuthPopup(provider: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
-    const width = 500;
-    const height = 600;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
+// Heardat API configuration
+const HEARDAT_API_URL = "https://www.heardatonline.co.za/api";
 
-    const popup = window.open(
-      popupUrl,
-      "oauth-popup",
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-    );
-
-    if (!popup) {
-      reject(new Error("Failed to open popup. Please allow popups."));
-      return;
+// Platform-specific storage
+const storage = Platform.OS === "web"
+  ? {
+      getItem: (key: string) => localStorage.getItem(key),
+      setItem: (key: string, value: string) => localStorage.setItem(key, value),
+      deleteItem: (key: string) => localStorage.removeItem(key),
     }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === "oauth-success" && event.data?.token) {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        resolve(event.data.token);
-      } else if (event.data?.type === "oauth-error") {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        reject(new Error(event.data.error || "OAuth failed"));
-      }
+  : {
+      getItem: (key: string) => SecureStore.getItemAsync(key),
+      setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+      deleteItem: (key: string) => SecureStore.deleteItemAsync(key),
     };
 
-    window.addEventListener("message", handleMessage);
-
-    const checkClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Authentication cancelled"));
-      }
-    }, 500);
-  });
+// Helper to get user's IP address
+async function getUserIP(): Promise<string> {
+  try {
+    const ipAddress = await Network.getIpAddressAsync();
+    console.log('User IP address:', ipAddress);
+    return ipAddress;
+  } catch (error) {
+    console.error('Failed to get IP address:', error);
+    return '0.0.0.0'; // Fallback IP
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [sessionKey, setSessionKey] = useState<string | null>(null);
+  const [userKey, setUserKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -80,136 +77,246 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      console.log('Fetching user session...');
+      console.log('Fetching user session from storage...');
       setLoading(true);
-      const session = await authClient.getSession();
-      console.log('Session response:', JSON.stringify(session, null, 2));
       
-      if (session?.data?.session && session?.data?.user) {
-        console.log('User authenticated:', session.data.user.email);
-        setUser(session.data.user as User);
-        setToken(session.data.session.token || null);
+      const storedSessionKey = await storage.getItem("session_key");
+      const storedUserKey = await storage.getItem("UserKey");
+      const storedUsername = await storage.getItem("Username");
+      const storedUserData = await storage.getItem("CurrentUser");
+      
+      if (storedSessionKey && storedUserKey && storedUserData) {
+        console.log('Found stored session, restoring user...');
+        const userData = JSON.parse(storedUserData);
+        setUser(userData);
+        setSessionKey(storedSessionKey);
+        setUserKey(storedUserKey);
+        setToken(storedSessionKey); // Use session key as token
+        console.log('User session restored:', userData.full_name || userData.name);
       } else {
         console.log('No active session found');
         setUser(null);
         setToken(null);
+        setSessionKey(null);
+        setUserKey(null);
       }
     } catch (error) {
       console.error("Failed to fetch user:", error);
       setUser(null);
       setToken(null);
+      setSessionKey(null);
+      setUserKey(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const signInWithEmail = async (email: string, password: string) => {
+  const signInWithEmail = async (username: string, password: string) => {
     try {
-      console.log('Attempting sign in with email:', email);
-      const response = await authClient.signIn.email({ 
-        email, 
-        password,
-        fetchOptions: {
-          onSuccess: async (ctx) => {
-            console.log('Sign in success callback:', ctx);
-          },
-          onError: (ctx) => {
-            console.error('Sign in error callback:', ctx);
-          }
-        }
+      console.log('Attempting sign in with username:', username);
+      setLoading(true);
+      
+      // Get user's IP address
+      const ipAddress = await getUserIP();
+      
+      // Build query parameters
+      const params = new URLSearchParams({
+        Login: username,
+        Password: password,
+        IP: ipAddress,
       });
       
-      console.log('Sign in response:', JSON.stringify(response, null, 2));
+      // Call Heardat Access API
+      const accessUrl = `${HEARDAT_API_URL}/Access?${params.toString()}`;
+      console.log('Calling Heardat Access API...');
       
-      if (response.error) {
-        console.error('Sign in error:', response.error);
-        const errorMessage = response.error.message || 'Invalid email or password';
-        throw new Error(errorMessage);
+      const response = await fetch(accessUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        console.error('Access API error:', response.status, response.statusText);
+        throw new Error('Invalid username or password');
       }
       
-      // Wait a moment for the session to be established
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const responseText = await response.text();
+      console.log('Access API response:', responseText);
       
-      // Fetch the user session
-      await fetchUser();
+      // Parse the response
+      const responseData = JSON.parse(responseText);
+      
+      if (!responseData.access || responseData.access.length === 0) {
+        throw new Error('Invalid username or password');
+      }
+      
+      const accessData = responseData.access[0];
+      const sessionKeyValue = accessData.SessionKey;
+      const userKeyValue = accessData.UserKey;
+      
+      console.log('Authentication successful, SessionKey:', sessionKeyValue);
+      
+      // Store authentication data
+      await storage.setItem("session_key", sessionKeyValue);
+      await storage.setItem("UserKey", userKeyValue);
+      await storage.setItem("Username", username);
+      await storage.setItem("Password", password);
+      
+      setSessionKey(sessionKeyValue);
+      setUserKey(userKeyValue);
+      setToken(sessionKeyValue);
+      
+      // Now fetch user details
+      console.log('Fetching user details...');
+      await fetchUserDetails({
+        User: accessData.User,
+        UserKey: userKeyValue,
+        CompanyKey: accessData.CompanyKey,
+        SessionKey: sessionKeyValue,
+        Company: accessData.Company,
+      });
+      
+      console.log('Sign in complete');
     } catch (error: any) {
       console.error("Email sign in failed:", error);
-      throw new Error(error.message || 'Invalid email or password. Please check your credentials and try again.');
+      // Clear any partial data
+      await storage.deleteItem("session_key");
+      await storage.deleteItem("UserKey");
+      await storage.deleteItem("Username");
+      await storage.deleteItem("Password");
+      await storage.deleteItem("CurrentUser");
+      
+      setUser(null);
+      setToken(null);
+      setSessionKey(null);
+      setUserKey(null);
+      
+      throw new Error(error.message || 'Invalid username or password. Please check your credentials and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUserDetails = async (accessData: any) => {
+    try {
+      const params = new URLSearchParams({
+        UserID: accessData.User,
+        Key: accessData.UserKey,
+        Userkey: accessData.UserKey,
+        Companykey: accessData.CompanyKey,
+        Sessionkey: accessData.SessionKey,
+      });
+      
+      const usersUrl = `${HEARDAT_API_URL}/Users?${params.toString()}`;
+      console.log('Calling Heardat Users API...');
+      
+      const response = await fetch(usersUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        console.error('Users API error:', response.status, response.statusText);
+        throw new Error('Failed to fetch user details');
+      }
+      
+      const responseText = await response.text();
+      console.log('Users API response:', responseText);
+      
+      const responseData = JSON.parse(responseText);
+      
+      if (!responseData.users || responseData.users.length === 0) {
+        throw new Error('User details not found');
+      }
+      
+      const userData = responseData.users[0];
+      
+      // Enhance user data with session information
+      const currentUser: User = {
+        ...userData,
+        id: accessData.User,
+        email: userData.Email || userData.email || '',
+        name: userData.Name || userData.name || userData.full_name || '',
+        full_name: userData.Name || userData.name || userData.full_name || '',
+        SessionKey: accessData.SessionKey,
+        CompanyKey: accessData.CompanyKey,
+        CompanyID: accessData.Company,
+        UserID: accessData.User,
+        UserKey: accessData.UserKey,
+      };
+      
+      console.log('User details fetched:', currentUser.full_name);
+      
+      // Store user data
+      await storage.setItem("CurrentUser", JSON.stringify(currentUser));
+      
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Failed to fetch user details:', error);
+      throw error;
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
-      console.log('Attempting sign up with email:', email, 'name:', name);
-      const response = await authClient.signUp.email({
-        email,
-        password,
-        name,
-        fetchOptions: {
-          onSuccess: async (ctx) => {
-            console.log('Sign up success callback:', ctx);
-          },
-          onError: (ctx) => {
-            console.error('Sign up error callback:', ctx);
-          }
-        }
-      });
-      
-      console.log('Sign up response:', JSON.stringify(response, null, 2));
-      
-      if (response.error) {
-        console.error('Sign up error:', response.error);
-        const errorMessage = response.error.message || 'Sign up failed';
-        
-        // Check for common error messages
-        if (errorMessage.includes('already exists') || errorMessage.includes('duplicate')) {
-          throw new Error('An account with this email already exists. Please sign in instead.');
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      // Wait a moment for the session to be established
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Fetch the user session
-      await fetchUser();
+      console.log('Sign up is not supported with Heardat API');
+      throw new Error('Sign up is not available. Please contact your administrator to create an account.');
     } catch (error: any) {
       console.error("Email sign up failed:", error);
       throw new Error(error.message || 'Sign up failed. Please try again.');
     }
   };
 
-  const signInWithSocial = async (provider: "google" | "apple" | "github") => {
+  const signInWithGoogle = async () => {
     try {
-      console.log('Attempting social sign in with:', provider);
-      if (Platform.OS === "web") {
-        const tokenValue = await openOAuthPopup(provider);
-        storeWebBearerToken(tokenValue);
-        await fetchUser();
-      } else {
-        await authClient.signIn.social({
-          provider,
-          callbackURL: "/",
-        });
-        await fetchUser();
-      }
+      console.log('Google sign in is not supported with Heardat API');
+      throw new Error('Google sign in is not available. Please use your username and password.');
     } catch (error: any) {
-      console.error(`${provider} sign in failed:`, error);
-      throw new Error(error.message || `${provider} sign in failed`);
+      console.error('Google sign in failed:', error);
+      throw new Error(error.message || 'Google sign in failed');
     }
   };
 
-  const signInWithGoogle = () => signInWithSocial("google");
-  const signInWithApple = () => signInWithSocial("apple");
-  const signInWithGitHub = () => signInWithSocial("github");
+  const signInWithApple = async () => {
+    try {
+      console.log('Apple sign in is not supported with Heardat API');
+      throw new Error('Apple sign in is not available. Please use your username and password.');
+    } catch (error: any) {
+      console.error('Apple sign in failed:', error);
+      throw new Error(error.message || 'Apple sign in failed');
+    }
+  };
+
+  const signInWithGitHub = async () => {
+    try {
+      console.log('GitHub sign in is not supported with Heardat API');
+      throw new Error('GitHub sign in is not available. Please use your username and password.');
+    } catch (error: any) {
+      console.error('GitHub sign in failed:', error);
+      throw new Error(error.message || 'GitHub sign in failed');
+    }
+  };
 
   const signOut = async () => {
     try {
       console.log('Signing out...');
-      await authClient.signOut();
+      
+      // Clear all stored data
+      await storage.deleteItem("session_key");
+      await storage.deleteItem("UserKey");
+      await storage.deleteItem("Username");
+      await storage.deleteItem("Password");
+      await storage.deleteItem("CurrentUser");
+      
       setUser(null);
       setToken(null);
+      setSessionKey(null);
+      setUserKey(null);
+      
       console.log('Sign out successful');
     } catch (error) {
       console.error("Sign out failed:", error);
@@ -222,6 +329,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         token,
+        sessionKey,
+        userKey,
         loading,
         signInWithEmail,
         signUpWithEmail,
