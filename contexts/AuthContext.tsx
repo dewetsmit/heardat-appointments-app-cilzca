@@ -42,9 +42,9 @@ const HEARDAT_API_URL = "https://www.heardatonline.co.za/api";
 // Platform-specific storage
 const storage = Platform.OS === "web"
   ? {
-      getItem: (key: string) => localStorage.getItem(key),
-      setItem: (key: string, value: string) => localStorage.setItem(key, value),
-      deleteItem: (key: string) => localStorage.removeItem(key),
+      getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+      setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
+      deleteItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
     }
   : {
       getItem: (key: string) => SecureStore.getItemAsync(key),
@@ -82,7 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const storedSessionKey = await storage.getItem("session_key");
       const storedUserKey = await storage.getItem("UserKey");
-      const storedUsername = await storage.getItem("Username");
       const storedUserData = await storage.getItem("CurrentUser");
       
       if (storedSessionKey && storedUserKey && storedUserData) {
@@ -143,20 +142,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       const responseText = await response.text();
-      console.log('Access API response:', responseText);
+      console.log('Access API raw response:', responseText);
       
-      // Parse the response
-      const responseData = JSON.parse(responseText);
+      // Parse the response as JSON
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(responseText);
+        console.log('Parsed response:', parsedResponse);
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError);
+        throw new Error('Invalid response from server');
+      }
       
-      if (!responseData.access || responseData.access.length === 0) {
+      // Check if access array exists and has items
+      if (!parsedResponse.access || !Array.isArray(parsedResponse.access) || parsedResponse.access.length === 0) {
+        console.error('No access data in response:', parsedResponse);
         throw new Error('Invalid username or password');
       }
       
-      const accessData = responseData.access[0];
+      // Get the first access item
+      const accessData = parsedResponse.access[0];
+      console.log('Access data:', accessData);
+      
+      // Check for SessionKey and UserKey to determine if auth is successful
+      if (!accessData.SessionKey || !accessData.UserKey) {
+        console.error('Missing SessionKey or UserKey in access data:', accessData);
+        throw new Error('Authentication failed - invalid credentials');
+      }
+      
       const sessionKeyValue = accessData.SessionKey;
       const userKeyValue = accessData.UserKey;
       
-      console.log('Authentication successful, SessionKey:', sessionKeyValue);
+      console.log('Authentication successful!');
+      console.log('SessionKey:', sessionKeyValue);
+      console.log('UserKey:', userKeyValue);
       
       // Store authentication data
       await storage.setItem("session_key", sessionKeyValue);
@@ -178,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Company: accessData.Company,
       });
       
-      console.log('Sign in complete');
+      console.log('Sign in complete - user authenticated successfully');
     } catch (error: any) {
       console.error("Email sign in failed:", error);
       // Clear any partial data
@@ -225,15 +244,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       const responseText = await response.text();
-      console.log('Users API response:', responseText);
+      console.log('Users API raw response:', responseText);
       
-      const responseData = JSON.parse(responseText);
+      // Parse the response as JSON
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(responseText);
+        console.log('Parsed users response:', parsedResponse);
+      } catch (parseError) {
+        console.error('Failed to parse users response as JSON:', parseError);
+        throw new Error('Invalid response from server');
+      }
       
-      if (!responseData.users || responseData.users.length === 0) {
+      if (!parsedResponse.users || !Array.isArray(parsedResponse.users) || parsedResponse.users.length === 0) {
+        console.error('No users data in response:', parsedResponse);
         throw new Error('User details not found');
       }
       
-      const userData = responseData.users[0];
+      const userData = parsedResponse.users[0];
+      console.log('User data:', userData);
       
       // Enhance user data with session information
       const currentUser: User = {
@@ -249,7 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         UserKey: accessData.UserKey,
       };
       
-      console.log('User details fetched:', currentUser.full_name);
+      console.log('User details fetched successfully:', currentUser.full_name || currentUser.name);
       
       // Store user data
       await storage.setItem("CurrentUser", JSON.stringify(currentUser));
