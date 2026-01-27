@@ -17,7 +17,9 @@ import { AudiologistSelector } from '@/components/AudiologistSelector';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppointments } from '@/contexts/AppointmentContext';
 import { getUserAppointments, formatDateForAPI } from '@/utils/api';
-import { Calendar, CalendarList, Agenda } from 'react-native-calendars';
+import { Calendar } from 'react-native-calendars';
+import { CalendarDayView } from '@/components/CalendarDayView';
+import { CalendarWeekView } from '@/components/CalendarWeekView';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -43,7 +45,7 @@ export default function CalendarScreen() {
   const [appointments, setAppointments] = useState<HeardatAppointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
   const [markedDates, setMarkedDates] = useState<any>({});
 
@@ -61,7 +63,6 @@ export default function CalendarScreen() {
       let startDate = selectedDate;
       let endDate = selectedDate;
       
-      // Adjust date range based on view mode
       if (viewMode === 'week') {
         const date = new Date(selectedDate);
         const dayOfWeek = date.getDay();
@@ -83,7 +84,6 @@ export default function CalendarScreen() {
       
       console.log('Fetching appointments from', startDate, 'to', endDate);
       
-      // If specific audiologists are selected, fetch for each
       let allAppointments: HeardatAppointment[] = [];
       
       if (selectedAudiologistIds.length > 0) {
@@ -101,7 +101,6 @@ export default function CalendarScreen() {
           }
         }
       } else {
-        // Fetch for current user
         const data = await getUserAppointments(startDate, endDate);
         
         if (data && data.appointments && Array.isArray(data.appointments)) {
@@ -112,7 +111,6 @@ export default function CalendarScreen() {
       setAppointments(allAppointments);
       console.log('Appointments loaded:', allAppointments.length);
       
-      // Mark dates with appointments
       const marked: any = {};
       allAppointments.forEach((appointment) => {
         const dateKey = appointment.DateAppointment;
@@ -124,7 +122,6 @@ export default function CalendarScreen() {
         }
       });
       
-      // Mark selected date
       marked[selectedDate] = {
         ...marked[selectedDate],
         selected: true,
@@ -150,7 +147,6 @@ export default function CalendarScreen() {
       return '';
     }
     
-    // Handle various time formats
     try {
       const parts = timeString.split(':');
       if (parts.length >= 2) {
@@ -170,9 +166,17 @@ export default function CalendarScreen() {
   function onDayPress(day: any) {
     console.log('Day pressed:', day.dateString);
     setSelectedDate(day.dateString);
+    if (viewMode === 'month') {
+      setViewMode('day');
+    }
   }
 
-  // Filter appointments for selected date
+  function handleDayPressFromWeek(date: string) {
+    console.log('Day pressed from week view:', date);
+    setSelectedDate(date);
+    setViewMode('day');
+  }
+
   const selectedDateAppointments = appointments.filter(
     (appointment) => appointment.DateAppointment === selectedDate
   );
@@ -180,7 +184,7 @@ export default function CalendarScreen() {
   const viewModeButtons = [
     { mode: 'day' as ViewMode, label: 'Day', icon: 'calendar-today' },
     { mode: 'week' as ViewMode, label: 'Week', icon: 'date-range' },
-    { mode: 'month' as ViewMode, label: 'Month', icon: 'calendar-month' },
+    { mode: 'month' as ViewMode, label: 'Month', icon: 'event' },
   ];
 
   if (isLoading && !isRefreshing) {
@@ -236,142 +240,162 @@ export default function CalendarScreen() {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
-        }
-      >
-        {/* Calendar View */}
-        <View style={styles.calendarContainer}>
-          <Calendar
-            current={selectedDate}
-            onDayPress={onDayPress}
-            markedDates={markedDates}
-            theme={{
-              backgroundColor: theme.colors.background,
-              calendarBackground: theme.colors.card,
-              textSectionTitleColor: theme.colors.text,
-              selectedDayBackgroundColor: theme.colors.primary,
-              selectedDayTextColor: '#FFFFFF',
-              todayTextColor: theme.colors.primary,
-              dayTextColor: theme.colors.text,
-              textDisabledColor: theme.dark ? '#4A4A4A' : '#D3D3D3',
-              dotColor: theme.colors.primary,
-              selectedDotColor: '#FFFFFF',
-              arrowColor: theme.colors.primary,
-              monthTextColor: theme.colors.text,
-              indicatorColor: theme.colors.primary,
-              textDayFontWeight: '400',
-              textMonthFontWeight: 'bold',
-              textDayHeaderFontWeight: '600',
-              textDayFontSize: 16,
-              textMonthFontSize: 18,
-              textDayHeaderFontSize: 14,
-            }}
-            style={[styles.calendar, { backgroundColor: theme.colors.card }]}
-          />
-        </View>
+      {viewMode === 'day' && (
+        <CalendarDayView
+          selectedDate={selectedDate}
+          appointments={selectedDateAppointments}
+          onAppointmentPress={(appointment) => {
+            console.log('Appointment pressed:', appointment);
+          }}
+        />
+      )}
 
-        {/* Appointments List for Selected Date */}
-        <View style={styles.appointmentsSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Appointments for {new Date(selectedDate).toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
-          </Text>
+      {viewMode === 'week' && (
+        <CalendarWeekView
+          selectedDate={selectedDate}
+          appointments={appointments}
+          onAppointmentPress={(appointment) => {
+            console.log('Appointment pressed:', appointment);
+          }}
+          onDayPress={handleDayPressFromWeek}
+        />
+      )}
 
-          {selectedDateAppointments.length === 0 ? (
-            <View style={styles.emptyState}>
-              <IconSymbol
-                ios_icon_name="calendar.badge.exclamationmark"
-                android_material_icon_name="event-busy"
-                size={48}
-                color={theme.dark ? '#98989D' : '#666'}
-              />
-              <Text style={[styles.emptyStateText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                No appointments for this date
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.appointmentsList}>
-              {selectedDateAppointments.map((appointment) => {
-                const timeText = formatTime(appointment.TimeAppointment);
-                return (
-                  <View
-                    key={appointment.AppointmentID}
-                    style={[
-                      styles.appointmentCard,
-                      { backgroundColor: theme.colors.card },
-                    ]}
-                  >
-                    <View style={styles.appointmentTime}>
-                      <IconSymbol
-                        ios_icon_name="clock"
-                        android_material_icon_name="access-time"
-                        size={16}
-                        color={theme.dark ? '#98989D' : '#666'}
-                      />
-                      <Text style={[styles.timeText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                        {timeText}
-                      </Text>
-                    </View>
-                    <View style={styles.appointmentContent}>
-                      <Text style={[styles.patientName, { color: theme.colors.text }]}>
-                        {appointment.ClientName}
-                      </Text>
-                      <View style={styles.appointmentDetails}>
-                        <View style={styles.detailRow}>
-                          <IconSymbol
-                            ios_icon_name="person.fill"
-                            android_material_icon_name="person"
-                            size={14}
-                            color={theme.dark ? '#98989D' : '#666'}
-                          />
-                          <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                            {appointment.UserName}
-                          </Text>
+      {viewMode === 'month' && (
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
+          }
+        >
+          <View style={styles.calendarContainer}>
+            <Calendar
+              current={selectedDate}
+              onDayPress={onDayPress}
+              markedDates={markedDates}
+              theme={{
+                backgroundColor: theme.colors.background,
+                calendarBackground: theme.colors.card,
+                textSectionTitleColor: theme.colors.text,
+                selectedDayBackgroundColor: theme.colors.primary,
+                selectedDayTextColor: '#FFFFFF',
+                todayTextColor: theme.colors.primary,
+                dayTextColor: theme.colors.text,
+                textDisabledColor: theme.dark ? '#4A4A4A' : '#D3D3D3',
+                dotColor: theme.colors.primary,
+                selectedDotColor: '#FFFFFF',
+                arrowColor: theme.colors.primary,
+                monthTextColor: theme.colors.text,
+                indicatorColor: theme.colors.primary,
+                textDayFontWeight: '400',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: '600',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                textDayHeaderFontSize: 14,
+              }}
+              style={[styles.calendar, { backgroundColor: theme.colors.card }]}
+            />
+          </View>
+
+          <View style={styles.appointmentsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Appointments for {new Date(selectedDate).toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </Text>
+
+            {selectedDateAppointments.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="calendar.badge.exclamationmark"
+                  android_material_icon_name="event-busy"
+                  size={48}
+                  color={theme.dark ? '#98989D' : '#666'}
+                />
+                <Text style={[styles.emptyStateText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                  No appointments for this date
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.appointmentsList}>
+                {selectedDateAppointments.map((appointment) => {
+                  const timeText = formatTime(appointment.TimeAppointment);
+                  return (
+                    <View
+                      key={appointment.AppointmentID}
+                      style={[
+                        styles.appointmentCard,
+                        { backgroundColor: theme.colors.card },
+                      ]}
+                    >
+                      <View style={styles.appointmentTime}>
+                        <IconSymbol
+                          ios_icon_name="clock"
+                          android_material_icon_name="access-time"
+                          size={16}
+                          color={theme.dark ? '#98989D' : '#666'}
+                        />
+                        <Text style={[styles.timeText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                          {timeText}
+                        </Text>
+                      </View>
+                      <View style={styles.appointmentContent}>
+                        <Text style={[styles.patientName, { color: theme.colors.text }]}>
+                          {appointment.ClientName}
+                        </Text>
+                        <View style={styles.appointmentDetails}>
+                          <View style={styles.detailRow}>
+                            <IconSymbol
+                              ios_icon_name="person.fill"
+                              android_material_icon_name="person"
+                              size={14}
+                              color={theme.dark ? '#98989D' : '#666'}
+                            />
+                            <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                              {appointment.UserName}
+                            </Text>
+                          </View>
+                          {appointment.ClientPhone && (
+                            <View style={styles.detailRow}>
+                              <IconSymbol
+                                ios_icon_name="phone.fill"
+                                android_material_icon_name="phone"
+                                size={14}
+                                color={theme.dark ? '#98989D' : '#666'}
+                              />
+                              <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                                {appointment.ClientPhone}
+                              </Text>
+                            </View>
+                          )}
+                          {appointment.Notes && (
+                            <View style={styles.detailRow}>
+                              <IconSymbol
+                                ios_icon_name="note.text"
+                                android_material_icon_name="description"
+                                size={14}
+                                color={theme.dark ? '#98989D' : '#666'}
+                              />
+                              <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                                {appointment.Notes}
+                              </Text>
+                            </View>
+                          )}
                         </View>
-                        {appointment.ClientPhone && (
-                          <View style={styles.detailRow}>
-                            <IconSymbol
-                              ios_icon_name="phone.fill"
-                              android_material_icon_name="phone"
-                              size={14}
-                              color={theme.dark ? '#98989D' : '#666'}
-                            />
-                            <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                              {appointment.ClientPhone}
-                            </Text>
-                          </View>
-                        )}
-                        {appointment.Notes && (
-                          <View style={styles.detailRow}>
-                            <IconSymbol
-                              ios_icon_name="note.text"
-                              android_material_icon_name="description"
-                              size={14}
-                              color={theme.dark ? '#98989D' : '#666'}
-                            />
-                            <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                              {appointment.Notes}
-                            </Text>
-                          </View>
-                        )}
                       </View>
                     </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
 
-      {/* Floating Action Button */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         onPress={() => {
