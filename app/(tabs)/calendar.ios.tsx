@@ -16,43 +16,122 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { AudiologistSelector } from '@/components/AudiologistSelector';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppointments } from '@/contexts/AppointmentContext';
-import { apiRequest, getAuthHeader } from '@/utils/api';
-import { Appointment } from '@/types';
+import { getUserAppointments, formatDateForAPI } from '@/utils/api';
+import { Calendar, CalendarList, Agenda } from 'react-native-calendars';
+
+type ViewMode = 'day' | 'week' | 'month';
+
+interface HeardatAppointment {
+  AppointmentID: string;
+  ClientName: string;
+  ClientEmail?: string;
+  ClientPhone?: string;
+  UserName: string;
+  DateAppointment: string;
+  TimeAppointment: string;
+  Duration?: number;
+  Status?: string;
+  Notes?: string;
+}
 
 export default function CalendarScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { token } = useAuth();
+  const { user } = useAuth();
   const { selectedAudiologistIds } = useAppointments();
 
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<HeardatAppointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
+  const [markedDates, setMarkedDates] = useState<any>({});
 
   useEffect(() => {
-    if (token) {
+    if (user) {
       loadAppointments();
     }
-  }, [token, selectedAudiologistIds, filterStatus]);
+  }, [user, selectedAudiologistIds, selectedDate, viewMode]);
 
   async function loadAppointments() {
-    console.log('Loading appointments...');
+    console.log('Loading appointments for calendar...');
     try {
-      let params = '';
+      setIsLoading(true);
+      
+      let startDate = selectedDate;
+      let endDate = selectedDate;
+      
+      // Adjust date range based on view mode
+      if (viewMode === 'week') {
+        const date = new Date(selectedDate);
+        const dayOfWeek = date.getDay();
+        const startOfWeek = new Date(date);
+        startOfWeek.setDate(date.getDate() - dayOfWeek);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        
+        startDate = formatDateForAPI(startOfWeek);
+        endDate = formatDateForAPI(endOfWeek);
+      } else if (viewMode === 'month') {
+        const date = new Date(selectedDate);
+        const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+        const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        
+        startDate = formatDateForAPI(startOfMonth);
+        endDate = formatDateForAPI(endOfMonth);
+      }
+      
+      console.log('Fetching appointments from', startDate, 'to', endDate);
+      
+      // If specific audiologists are selected, fetch for each
+      let allAppointments: HeardatAppointment[] = [];
+      
       if (selectedAudiologistIds.length > 0) {
-        params += `?audiologist_ids=${selectedAudiologistIds.join(',')}`;
+        for (const audiologistId of selectedAudiologistIds) {
+          try {
+            const data = await getUserAppointments(startDate, endDate, {
+              UserID: audiologistId,
+            });
+            
+            if (data && data.appointments && Array.isArray(data.appointments)) {
+              allAppointments = [...allAppointments, ...data.appointments];
+            }
+          } catch (error) {
+            console.error('Failed to load appointments for audiologist:', audiologistId, error);
+          }
+        }
+      } else {
+        // Fetch for current user
+        const data = await getUserAppointments(startDate, endDate);
+        
+        if (data && data.appointments && Array.isArray(data.appointments)) {
+          allAppointments = data.appointments;
+        }
       }
-      if (filterStatus !== 'all') {
-        params += params ? `&status=${filterStatus}` : `?status=${filterStatus}`;
-      }
-
-      const data = await apiRequest(`/api/appointments${params}`, {
-        headers: getAuthHeader(token!),
+      
+      setAppointments(allAppointments);
+      console.log('Appointments loaded:', allAppointments.length);
+      
+      // Mark dates with appointments
+      const marked: any = {};
+      allAppointments.forEach((appointment) => {
+        const dateKey = appointment.DateAppointment;
+        if (dateKey) {
+          marked[dateKey] = {
+            marked: true,
+            dotColor: theme.colors.primary,
+          };
+        }
       });
-
-      setAppointments(data);
-      console.log('Appointments loaded:', data.length);
+      
+      // Mark selected date
+      marked[selectedDate] = {
+        ...marked[selectedDate],
+        selected: true,
+        selectedColor: theme.colors.primary,
+      };
+      
+      setMarkedDates(marked);
     } catch (error) {
       console.error('Failed to load appointments:', error);
     } finally {
@@ -66,69 +145,45 @@ export default function CalendarScreen() {
     await loadAppointments();
   }
 
-  function formatDate(dateString: string): string {
-    const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const isToday = date.toDateString() === today.toDateString();
-    const isTomorrow = date.toDateString() === tomorrow.toDateString();
-
-    if (isToday) {
-      return 'Today';
+  function formatTime(timeString: string): string {
+    if (!timeString) {
+      return '';
     }
-    if (isTomorrow) {
-      return 'Tomorrow';
+    
+    // Handle various time formats
+    try {
+      const parts = timeString.split(':');
+      if (parts.length >= 2) {
+        const hours = parseInt(parts[0], 10);
+        const minutes = parts[1];
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${minutes} ${ampm}`;
+      }
+    } catch (error) {
+      console.error('Error formatting time:', error);
     }
-
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    
+    return timeString;
   }
 
-  function formatTime(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  function onDayPress(day: any) {
+    console.log('Day pressed:', day.dateString);
+    setSelectedDate(day.dateString);
   }
 
-  function getStatusColor(status: string): string {
-    const statusColors: Record<string, string> = {
-      scheduled: '#FFA500',
-      completed: '#50C878',
-      cancelled: '#FF6B6B',
-      'no-show': '#9B59B6',
-    };
-    return statusColors[status] || '#666';
-  }
+  // Filter appointments for selected date
+  const selectedDateAppointments = appointments.filter(
+    (appointment) => appointment.DateAppointment === selectedDate
+  );
 
-  function getStatusLabel(status: string): string {
-    const statusLabels: Record<string, string> = {
-      scheduled: 'Scheduled',
-      completed: 'Completed',
-      cancelled: 'Cancelled',
-      'no-show': 'No Show',
-    };
-    return statusLabels[status] || status;
-  }
-
-  const groupedAppointments: Record<string, Appointment[]> = {};
-  appointments.forEach((appointment) => {
-    const dateKey = formatDate(appointment.appointment_date);
-    if (!groupedAppointments[dateKey]) {
-      groupedAppointments[dateKey] = [];
-    }
-    groupedAppointments[dateKey].push(appointment);
-  });
-
-  const dateKeys = Object.keys(groupedAppointments);
-
-  const filterOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'scheduled', label: 'Scheduled' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' },
+  const viewModeButtons = [
+    { mode: 'day' as ViewMode, label: 'Day', icon: 'calendar-today' },
+    { mode: 'week' as ViewMode, label: 'Week', icon: 'date-range' },
+    { mode: 'month' as ViewMode, label: 'Month', icon: 'calendar-month' },
   ];
 
-  if (isLoading) {
+  if (isLoading && !isRefreshing) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
@@ -146,38 +201,39 @@ export default function CalendarScreen() {
           <AudiologistSelector />
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterContainer}
-        >
-          {filterOptions.map((option) => {
-            const isSelected = filterStatus === option.value;
+        <View style={styles.viewModeContainer}>
+          {viewModeButtons.map((button) => {
+            const isSelected = viewMode === button.mode;
             return (
               <TouchableOpacity
-                key={option.value}
+                key={button.mode}
                 style={[
-                  styles.filterButton,
+                  styles.viewModeButton,
                   {
                     backgroundColor: isSelected ? theme.colors.primary : theme.colors.card,
                     borderColor: isSelected ? theme.colors.primary : theme.colors.border,
                   },
                 ]}
-                onPress={() => setFilterStatus(option.value)}
+                onPress={() => setViewMode(button.mode)}
               >
+                <IconSymbol
+                  ios_icon_name="calendar"
+                  android_material_icon_name={button.icon}
+                  size={18}
+                  color={isSelected ? '#FFFFFF' : theme.colors.text}
+                />
                 <Text
                   style={[
-                    styles.filterButtonText,
+                    styles.viewModeButtonText,
                     { color: isSelected ? '#FFFFFF' : theme.colors.text },
                   ]}
                 >
-                  {option.label}
+                  {button.label}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
 
       <ScrollView
@@ -187,96 +243,132 @@ export default function CalendarScreen() {
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
         }
       >
-        {dateKeys.length === 0 ? (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="calendar.badge.exclamationmark"
-              android_material_icon_name="event-busy"
-              size={64}
-              color={theme.dark ? '#98989D' : '#666'}
-            />
-            <Text style={[styles.emptyStateText, { color: theme.dark ? '#98989D' : '#666' }]}>
-              No appointments found
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.appointmentsContainer}>
-            {dateKeys.map((dateKey) => {
-              const dayAppointments = groupedAppointments[dateKey];
-              return (
-                <View key={dateKey} style={styles.dateSection}>
-                  <Text style={[styles.dateHeader, { color: theme.colors.text }]}>{dateKey}</Text>
-                  <View style={styles.appointmentsList}>
-                    {dayAppointments.map((appointment) => {
-                      const timeText = formatTime(appointment.appointment_date);
-                      const statusColor = getStatusColor(appointment.status);
-                      const statusLabel = getStatusLabel(appointment.status);
-                      return (
-                        <View
-                          key={appointment.id}
-                          style={[
-                            styles.appointmentCard,
-                            { backgroundColor: theme.colors.card, borderLeftColor: statusColor },
-                          ]}
-                        >
-                          <View style={styles.appointmentTime}>
+        {/* Calendar View */}
+        <View style={styles.calendarContainer}>
+          <Calendar
+            current={selectedDate}
+            onDayPress={onDayPress}
+            markedDates={markedDates}
+            theme={{
+              backgroundColor: theme.colors.background,
+              calendarBackground: theme.colors.card,
+              textSectionTitleColor: theme.colors.text,
+              selectedDayBackgroundColor: theme.colors.primary,
+              selectedDayTextColor: '#FFFFFF',
+              todayTextColor: theme.colors.primary,
+              dayTextColor: theme.colors.text,
+              textDisabledColor: theme.dark ? '#4A4A4A' : '#D3D3D3',
+              dotColor: theme.colors.primary,
+              selectedDotColor: '#FFFFFF',
+              arrowColor: theme.colors.primary,
+              monthTextColor: theme.colors.text,
+              indicatorColor: theme.colors.primary,
+              textDayFontWeight: '400',
+              textMonthFontWeight: 'bold',
+              textDayHeaderFontWeight: '600',
+              textDayFontSize: 16,
+              textMonthFontSize: 18,
+              textDayHeaderFontSize: 14,
+            }}
+            style={[styles.calendar, { backgroundColor: theme.colors.card }]}
+          />
+        </View>
+
+        {/* Appointments List for Selected Date */}
+        <View style={styles.appointmentsSection}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Appointments for {new Date(selectedDate).toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </Text>
+
+          {selectedDateAppointments.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol
+                ios_icon_name="calendar.badge.exclamationmark"
+                android_material_icon_name="event-busy"
+                size={48}
+                color={theme.dark ? '#98989D' : '#666'}
+              />
+              <Text style={[styles.emptyStateText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                No appointments for this date
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.appointmentsList}>
+              {selectedDateAppointments.map((appointment) => {
+                const timeText = formatTime(appointment.TimeAppointment);
+                return (
+                  <View
+                    key={appointment.AppointmentID}
+                    style={[
+                      styles.appointmentCard,
+                      { backgroundColor: theme.colors.card },
+                    ]}
+                  >
+                    <View style={styles.appointmentTime}>
+                      <IconSymbol
+                        ios_icon_name="clock"
+                        android_material_icon_name="access-time"
+                        size={16}
+                        color={theme.dark ? '#98989D' : '#666'}
+                      />
+                      <Text style={[styles.timeText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        {timeText}
+                      </Text>
+                    </View>
+                    <View style={styles.appointmentContent}>
+                      <Text style={[styles.patientName, { color: theme.colors.text }]}>
+                        {appointment.ClientName}
+                      </Text>
+                      <View style={styles.appointmentDetails}>
+                        <View style={styles.detailRow}>
+                          <IconSymbol
+                            ios_icon_name="person.fill"
+                            android_material_icon_name="person"
+                            size={14}
+                            color={theme.dark ? '#98989D' : '#666'}
+                          />
+                          <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                            {appointment.UserName}
+                          </Text>
+                        </View>
+                        {appointment.ClientPhone && (
+                          <View style={styles.detailRow}>
                             <IconSymbol
-                              ios_icon_name="clock"
-                              android_material_icon_name="access-time"
-                              size={16}
+                              ios_icon_name="phone.fill"
+                              android_material_icon_name="phone"
+                              size={14}
                               color={theme.dark ? '#98989D' : '#666'}
                             />
-                            <Text style={[styles.timeText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                              {timeText}
+                            <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                              {appointment.ClientPhone}
                             </Text>
                           </View>
-                          <View style={styles.appointmentContent}>
-                            <View style={styles.appointmentHeader}>
-                              <Text style={[styles.patientName, { color: theme.colors.text }]}>
-                                {appointment.patient_name}
-                              </Text>
-                              <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
-                                <Text style={[styles.statusText, { color: statusColor }]}>
-                                  {statusLabel}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.appointmentDetails}>
-                              <View style={styles.detailRow}>
-                                <IconSymbol
-                                  ios_icon_name="person.fill"
-                                  android_material_icon_name="person"
-                                  size={14}
-                                  color={theme.dark ? '#98989D' : '#666'}
-                                />
-                                <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                                  {appointment.audiologist.full_name}
-                                </Text>
-                              </View>
-                              {appointment.patient_phone && (
-                                <View style={styles.detailRow}>
-                                  <IconSymbol
-                                    ios_icon_name="phone.fill"
-                                    android_material_icon_name="phone"
-                                    size={14}
-                                    color={theme.dark ? '#98989D' : '#666'}
-                                  />
-                                  <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                                    {appointment.patient_phone}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
+                        )}
+                        {appointment.Notes && (
+                          <View style={styles.detailRow}>
+                            <IconSymbol
+                              ios_icon_name="note.text"
+                              android_material_icon_name="description"
+                              size={14}
+                              color={theme.dark ? '#98989D' : '#666'}
+                            />
+                            <Text style={[styles.detailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                              {appointment.Notes}
+                            </Text>
                           </View>
-                        </View>
-                      );
-                    })}
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Floating Action Button */}
@@ -322,22 +414,22 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
   },
-  filterScroll: {
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  filterContainer: {
+  viewModeContainer: {
     flexDirection: 'row',
     gap: 8,
-    paddingRight: 20,
   },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  viewModeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     borderWidth: 1,
+    gap: 6,
   },
-  filterButtonText: {
+  viewModeButtonText: {
     fontSize: 14,
     fontWeight: '600',
   },
@@ -345,25 +437,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
+    paddingBottom: 20,
+  },
+  calendarContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  calendar: {
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  appointmentsSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 64,
-    gap: 16,
-  },
-  emptyStateText: {
-    fontSize: 18,
-  },
-  appointmentsContainer: {
-    gap: 24,
-  },
-  dateSection: {
+    paddingVertical: 48,
     gap: 12,
   },
-  dateHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  emptyStateText: {
+    fontSize: 16,
   },
   appointmentsList: {
     gap: 12,
@@ -373,7 +476,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     gap: 12,
-    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -393,23 +495,8 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
-  appointmentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   patientName: {
     fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusText: {
-    fontSize: 12,
     fontWeight: '600',
   },
   appointmentDetails: {
@@ -422,6 +509,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
+    flex: 1,
   },
   fab: {
     position: 'absolute',

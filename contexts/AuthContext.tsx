@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import * as Network from "expo-network";
+import { getUserAppointments, formatDateForAPI } from "@/utils/api";
 
 interface User {
   id: string;
@@ -15,6 +16,7 @@ interface User {
   SessionKey?: string;
   CompanyKey?: string;
   CompanyID?: string;
+  BranchID?: string;
   UserID?: string;
   Username?: string;
 }
@@ -214,7 +216,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         CompanyKey: accessData.CompanyKey,
         SessionKey: sessionKeyValue,
         Company: accessData.Company,
+        Branch: accessData.Branch,
       });
+      
+      // Fetch today's appointments for the current user
+      console.log('Fetching today\'s appointments...');
+      try {
+        const today = new Date();
+        const todayStr = formatDateForAPI(today);
+        
+        const appointmentsData = await getUserAppointments(todayStr, todayStr);
+        console.log('Today\'s appointments fetched:', appointmentsData);
+      } catch (appointmentError) {
+        console.error('Failed to fetch appointments on login:', appointmentError);
+        // Don't fail login if appointments fetch fails
+      }
       
       console.log('Sign in complete - user authenticated successfully');
     } catch (error: any) {
@@ -293,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         SessionKey: accessData.SessionKey,
         CompanyKey: accessData.CompanyKey,
         CompanyID: accessData.Company,
+        BranchID: accessData.Branch,
         UserID: accessData.User,
         UserKey: accessData.UserKey,
       };

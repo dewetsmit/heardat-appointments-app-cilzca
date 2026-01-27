@@ -44,6 +44,8 @@ export const getHeardatCredentials = async (): Promise<{
   userKey: string | null;
   companyKey: string | null;
   userId: string | null;
+  companyId: string | null;
+  branchId: string | null;
 }> => {
   try {
     const currentUserStr = await storage.getItem("CurrentUser");
@@ -57,6 +59,8 @@ export const getHeardatCredentials = async (): Promise<{
         userKey: userKey || currentUser.UserKey || null,
         companyKey: currentUser.CompanyKey || null,
         userId: currentUser.UserID || null,
+        companyId: currentUser.CompanyID || null,
+        branchId: currentUser.BranchID || null,
       };
     }
     
@@ -65,6 +69,8 @@ export const getHeardatCredentials = async (): Promise<{
       userKey,
       companyKey: null,
       userId: null,
+      companyId: null,
+      branchId: null,
     };
   } catch (error) {
     console.error("[API] Error retrieving Heardat credentials:", error);
@@ -73,6 +79,8 @@ export const getHeardatCredentials = async (): Promise<{
       userKey: null,
       companyKey: null,
       userId: null,
+      companyId: null,
+      branchId: null,
     };
   }
 };
@@ -183,6 +191,69 @@ export const heardatApiCall = async <T = any>(
     console.error("[Heardat API] Request failed:", error);
     throw error;
   }
+};
+
+/**
+ * Generic function to get appointments for a user
+ * Can be used for current user or searched/selected users
+ * 
+ * @param startDate - Optional start date in YYYY-MM-DD format
+ * @param endDate - Optional end date in YYYY-MM-DD format
+ * @param searchUser - Optional user object with CompanyID, BranchID, UserID
+ * @returns Promise with appointments data
+ */
+export const getUserAppointments = async (
+  startDate?: string,
+  endDate?: string,
+  searchUser?: {
+    CompanyID?: string;
+    BranchID?: string;
+    UserID?: string;
+  }
+): Promise<any> => {
+  try {
+    console.log('[API] Getting user appointments', { startDate, endDate, searchUser });
+    
+    // Get current user credentials if no searchUser provided
+    const credentials = await getHeardatCredentials();
+    
+    // Build request parameters
+    const params: Record<string, string> = {
+      CompanyID: searchUser?.CompanyID || credentials.companyId || "0",
+      BranchID: searchUser?.BranchID || credentials.branchId || "0",
+      UserIDAssigned: searchUser?.UserID?.toString() || credentials.userId || "0",
+      Deleted: "0",
+    };
+    
+    // Add date parameters if provided
+    if (startDate) {
+      params.DateAppointmentStart = startDate;
+    }
+    if (endDate) {
+      params.DateAppointmentEnd = endDate;
+    }
+    
+    console.log('[API] Appointments request params:', params);
+    
+    // Call Heardat API
+    const data = await heardatApiCall('Appointments', params);
+    
+    console.log('[API] Appointments fetched successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to get user appointments:', error);
+    throw error;
+  }
+};
+
+/**
+ * Format date to YYYY-MM-DD format for API calls
+ */
+export const formatDateForAPI = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 /**
