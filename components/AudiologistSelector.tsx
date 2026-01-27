@@ -47,18 +47,19 @@ export function AudiologistSelector() {
       
       // Call Heardat API
       const response = await heardatApiCall<any>('AppointmentUsers', params);
-      
+      const responseJSON = JSON.parse(response);
       console.log('AppointmentUsers response:', response);
       
       // Parse the response - it should contain an array of appointment users
       let appointmentUsers = [];
-      
-      if (response.appointmentusers && Array.isArray(response.appointmentusers)) {
-        appointmentUsers = response.appointmentusers;
-      } else if (Array.isArray(response)) {
-        appointmentUsers = response;
+
+      if (responseJSON.appointmentusers && Array.isArray(responseJSON.appointmentusers)) {
+        console.log("acs")
+        appointmentUsers = responseJSON.appointmentusers;
+      } else if (Array.isArray(responseJSON)) {
+        appointmentUsers = responseJSON;
       } else {
-        console.warn('Unexpected response format from AppointmentUsers:', response);
+        console.warn('Unexpected response format from AppointmentUsers:', responseJSON);
         appointmentUsers = [];
       }
       
@@ -66,7 +67,7 @@ export function AudiologistSelector() {
       const transformedAudiologists: Audiologist[] = appointmentUsers.map((user: any) => ({
         id: user.User?.toString() || user.UserID?.toString() || user.id?.toString() || '',
         user_id: user.User?.toString() || user.UserID?.toString() || '',
-        full_name: user.Name || user.FullName || user.full_name || 'Unknown',
+        full_name: user.FirstName + ' ' + user.LastName || 'Unknown',
         specialization: user.Specialization || user.specialization || undefined,
         is_active: user.Active === '1' || user.Active === 1 || user.is_active === true,
       }));
@@ -122,7 +123,7 @@ export function AudiologistSelector() {
           <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Select Audiologists
+                Select Consultant
               </Text>
               <TouchableOpacity onPress={() => setIsModalVisible(false)}>
                 <IconSymbol
