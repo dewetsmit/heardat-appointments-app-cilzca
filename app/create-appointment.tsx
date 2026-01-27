@@ -17,7 +17,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { IconSymbol } from '@/components/IconSymbol';
-import { apiRequest, getAuthHeader } from '@/utils/api';
+import { 
+  apiRequest, 
+  getAuthHeader, 
+  getAllPatients, 
+  getBranches, 
+  getAppointmentProcedures,
+  heardatApiCall,
+  getHeardatCredentials
+} from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Client, Branch, Procedure, Audiologist } from '@/types';
 
@@ -79,30 +87,70 @@ export default function CreateAppointmentScreen() {
 
     try {
       setLoading(true);
-      const headers = await getAuthHeader();
+      
+      // Get user credentials for branch ID
+      const credentials = await getHeardatCredentials();
+      const branchId = credentials.branchId || "0";
+      
+      console.log('Loading data with branchId:', branchId);
 
-      // Load all dropdown data in parallel
-      const [clientsRes, branchesRes, proceduresRes, audiologistsRes, assistantsRes] = await Promise.all([
-        apiRequest('/api/clients', { headers }),
-        apiRequest('/api/branches', { headers }),
-        apiRequest('/api/procedures', { headers }),
-        apiRequest('/api/audiologists', { headers }),
-        apiRequest('/api/assistants', { headers }),
+      // Load clients, branches, and procedures from Heardat API
+      // Load audiologists from Heardat API (AppointmentUsers endpoint)
+      const [clientsRes, branchesRes, proceduresRes, audiologistsRes] = await Promise.all([
+        getAllPatients(branchId, ''),
+        getBranches(),
+        getAppointmentProcedures(),
+        heardatApiCall('AppointmentUsers', {
+          BranchId: "0",
+          CompanyID: credentials.companyId || "0",
+          Active: "1",
+          Deleted: "0"
+        }),
       ]);
 
-      console.log('Form data loaded:', {
-        clients: clientsRes.length,
-        branches: branchesRes.length,
-        procedures: proceduresRes.length,
-        examiners: audiologistsRes.length,
-        assistants: assistantsRes.length,
+      console.log('Form data loaded from Heardat API:', {
+        clients: clientsRes?.length || 0,
+        branches: branchesRes?.length || 0,
+        procedures: proceduresRes?.length || 0,
+        audiologists: audiologistsRes?.length || 0,
       });
 
-      setClients(clientsRes);
-      setBranches(branchesRes);
-      setProcedures(proceduresRes);
-      setExaminers(audiologistsRes);
-      setAssistants(assistantsRes);
+      // Map Heardat API responses to our Client, Branch, Procedure types
+      const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
+        id: patient.PatientsID || patient.id,
+        name: patient.Name || patient.FullName || 'Unknown',
+        email: patient.Email || patient.email,
+        phone: patient.Phone || patient.phone,
+      }));
+
+      const mappedBranches: Branch[] = (branchesRes || []).map((branch: any) => ({
+        id: branch.BranchID || branch.id,
+        name: branch.BranchName || branch.Name || 'Unknown',
+        address: branch.Address || branch.address,
+      }));
+
+      const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => ({
+        id: proc.ProceduresID || proc.id,
+        name: proc.ProcedureName || proc.Name || 'Unknown',
+        description: proc.Description || proc.description,
+        duration_minutes: proc.Duration || proc.duration_minutes || 30,
+      }));
+
+      const mappedAudiologists: Audiologist[] = (audiologistsRes || []).map((user: any) => ({
+        id: user.UserID?.toString() || user.id,
+        user_id: user.UserID?.toString() || user.id,
+        full_name: user.FullName || user.Name || 'Unknown',
+        specialization: user.Specialization || user.specialization,
+        is_active: user.Active === "1" || user.is_active === true,
+      }));
+
+      setClients(mappedClients);
+      setBranches(mappedBranches);
+      setProcedures(mappedProcedures);
+      setExaminers(mappedAudiologists);
+      setAssistants(mappedAudiologists); // Use same list for assistants
+      
+      console.log('Form data mapped and set successfully');
     } catch (error) {
       console.error('Error loading form data:', error);
       Alert.alert('Error', 'Failed to load form data. Please try again.');

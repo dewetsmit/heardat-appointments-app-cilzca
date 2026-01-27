@@ -247,6 +247,120 @@ export const getUserAppointments = async (
 };
 
 /**
+ * Get all clients/patients from Heardat API
+ * 
+ * @param branchId - Branch ID to filter by
+ * @param search - Search term for filtering clients
+ * @returns Promise with clients data
+ */
+export const getAllPatients = async (
+  branchId: string,
+  search: string = ''
+): Promise<any> => {
+  try {
+    console.log('[API] Getting all patients', { branchId, search });
+    
+    const credentials = await getHeardatCredentials();
+    
+    const params: Record<string, string> = {
+      Deleted: "0",
+      Active: "1",
+      BranchID: branchId,
+      UserID: credentials.userId || "0",
+      Search: search,
+    };
+    
+    console.log('[API] Patients request params:', params);
+    
+    const data = await heardatApiCall('Patients', params);
+    
+    console.log('[API] Patients fetched successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to get patients:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get a specific client/patient by ID from Heardat API
+ * 
+ * @param patientId - Patient ID to fetch
+ * @returns Promise with patient data
+ */
+export const getSelectedPatient = async (patientId: string): Promise<any> => {
+  try {
+    console.log('[API] Getting selected patient', { patientId });
+    
+    const params: Record<string, string> = {
+      PatientsID: patientId,
+    };
+    
+    console.log('[API] Selected patient request params:', params);
+    
+    const data = await heardatApiCall('Patients', params);
+    
+    console.log('[API] Selected patient fetched successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to get selected patient:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all branches from Heardat API
+ * 
+ * @returns Promise with branches data
+ */
+export const getBranches = async (): Promise<any> => {
+  try {
+    console.log('[API] Getting branches');
+    
+    const params: Record<string, string> = {
+      Deleted: "0",
+      Active: "1",
+    };
+    
+    console.log('[API] Branches request params:', params);
+    
+    const data = await heardatApiCall('Branch', params);
+    
+    console.log('[API] Branches fetched successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to get branches:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all appointment procedures from Heardat API
+ * 
+ * @returns Promise with procedures data
+ */
+export const getAppointmentProcedures = async (): Promise<any> => {
+  try {
+    console.log('[API] Getting appointment procedures');
+    
+    const params: Record<string, string> = {
+      Deleted: "0",
+      Active: "1",
+    };
+    
+    console.log('[API] Procedures request params:', params);
+    
+    const data = await heardatApiCall('Procedures', params);
+    
+    console.log('[API] Procedures fetched successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to get procedures:', error);
+    throw error;
+  }
+};
+
+/**
  * Format date to YYYY-MM-DD format for API calls
  */
 export const formatDateForAPI = (date: Date): string => {
