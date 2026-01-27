@@ -159,7 +159,6 @@ export default function CreateAppointmentScreen() {
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
       console.log('Date selected:', selectedDate.toISOString());
@@ -167,7 +166,6 @@ export default function CreateAppointmentScreen() {
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {
-    setShowTimePicker(false);
     if (selectedTime) {
       setTime(selectedTime);
       console.log('Time selected:', selectedTime.toISOString());
@@ -400,8 +398,8 @@ export default function CreateAppointmentScreen() {
           <TouchableOpacity
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
-              console.log('Date picker opened');
-              setShowDatePicker(true);
+              console.log('Date picker button tapped');
+              setShowDatePicker(!showDatePicker);
             }}
           >
             <IconSymbol
@@ -430,8 +428,8 @@ export default function CreateAppointmentScreen() {
           <TouchableOpacity
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
-              console.log('Time picker opened');
-              setShowTimePicker(true);
+              console.log('Time picker button tapped');
+              setShowTimePicker(!showTimePicker);
             }}
           >
             <IconSymbol
