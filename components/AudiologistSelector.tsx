@@ -13,7 +13,7 @@ import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppointments } from '@/contexts/AppointmentContext';
-import { apiRequest, getAuthHeader } from '@/utils/api';
+import { heardatApiCall } from '@/utils/api';
 import { Audiologist } from '@/types';
 
 export function AudiologistSelector() {
@@ -32,17 +32,51 @@ export function AudiologistSelector() {
   }, [token, user]);
 
   async function loadAudiologists() {
-    console.log('Loading audiologists...');
+    console.log('Loading audiologists from Heardat API...');
     setIsLoading(true);
     try {
-      const params = user?.practice_id ? `?practice_id=${user.practice_id}` : '';
-      const data = await apiRequest(`/api/audiologists${params}`, {
-        headers: getAuthHeader(token!),
-      });
-      setAudiologists(data);
-      console.log('Audiologists loaded:', data.length);
+      // Build parameters matching the Angular method
+      const params: Record<string, string> = {
+        BranchId: '0',
+        CompanyID: user?.CompanyID || '',
+        Active: '1',
+        Deleted: '0',
+      };
+
+      console.log('Calling AppointmentUsers with params:', params);
+      
+      // Call Heardat API
+      const response = await heardatApiCall<any>('AppointmentUsers', params);
+      
+      console.log('AppointmentUsers response:', response);
+      
+      // Parse the response - it should contain an array of appointment users
+      let appointmentUsers = [];
+      
+      if (response.appointmentusers && Array.isArray(response.appointmentusers)) {
+        appointmentUsers = response.appointmentusers;
+      } else if (Array.isArray(response)) {
+        appointmentUsers = response;
+      } else {
+        console.warn('Unexpected response format from AppointmentUsers:', response);
+        appointmentUsers = [];
+      }
+      
+      // Transform Heardat appointment users to our Audiologist format
+      const transformedAudiologists: Audiologist[] = appointmentUsers.map((user: any) => ({
+        id: user.User?.toString() || user.UserID?.toString() || user.id?.toString() || '',
+        user_id: user.User?.toString() || user.UserID?.toString() || '',
+        full_name: user.Name || user.FullName || user.full_name || 'Unknown',
+        specialization: user.Specialization || user.specialization || undefined,
+        is_active: user.Active === '1' || user.Active === 1 || user.is_active === true,
+      }));
+      
+      console.log('Transformed audiologists:', transformedAudiologists.length, 'items');
+      setAudiologists(transformedAudiologists);
     } catch (error) {
-      console.error('Failed to load audiologists:', error);
+      console.error('Failed to load audiologists from Heardat API:', error);
+      // Set empty array on error so UI doesn't break
+      setAudiologists([]);
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +137,12 @@ export function AudiologistSelector() {
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : audiologists.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                  No audiologists found
+                </Text>
               </View>
             ) : (
               <ScrollView style={styles.audiologistList}>
@@ -206,6 +246,13 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
   },
   audiologistList: {
     maxHeight: 400,
