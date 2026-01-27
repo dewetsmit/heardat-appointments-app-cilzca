@@ -20,6 +20,7 @@ import { getUserAppointments, formatDateForAPI } from '@/utils/api';
 import { Calendar } from 'react-native-calendars';
 import { CalendarDayView } from '@/components/CalendarDayView';
 import { CalendarWeekView } from '@/components/CalendarWeekView';
+import SideNav from '@/components/SideNav';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -48,6 +49,7 @@ export default function CalendarScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
   const [markedDates, setMarkedDates] = useState<any>({});
+  const [sideNavVisible, setSideNavVisible] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -201,7 +203,20 @@ export default function CalendarScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Calendar</Text>
+          <TouchableOpacity
+            style={[styles.menuButton, { backgroundColor: `${theme.colors.primary}20` }]}
+            onPress={() => {
+              console.log('Menu button pressed');
+              setSideNavVisible(true);
+            }}
+          >
+            <IconSymbol
+              ios_icon_name="line.3.horizontal"
+              android_material_icon_name="menu"
+              size={24}
+              color={theme.colors.primary}
+            />
+          </TouchableOpacity>
           <AudiologistSelector />
         </View>
 
@@ -410,6 +425,8 @@ export default function CalendarScreen() {
           color="#FFFFFF"
         />
       </TouchableOpacity>
+
+      <SideNav visible={sideNavVisible} onClose={() => setSideNavVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -434,9 +451,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  menuButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   viewModeContainer: {
     flexDirection: 'row',
@@ -461,7 +481,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   calendarContainer: {
     paddingHorizontal: 20,

@@ -2,15 +2,12 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
+import { Dimensions } from 'react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function TabLayout() {
   const tabs: TabBarItem[] = [
-    {
-      name: '(home)',
-      route: '/(tabs)/(home)/',
-      icon: 'home',
-      label: 'Dashboard',
-    },
     {
       name: 'calendar',
       route: '/(tabs)/calendar',
@@ -33,11 +30,13 @@ export default function TabLayout() {
           animation: 'none',
         }}
       >
-        <Stack.Screen key="home" name="(home)" />
         <Stack.Screen key="calendar" name="calendar" />
         <Stack.Screen key="profile" name="profile" />
       </Stack>
-      <FloatingTabBar tabs={tabs} />
+      <FloatingTabBar 
+        tabs={tabs} 
+        containerWidth={SCREEN_WIDTH - 40}
+      />
     </React.Fragment>
   );
 }

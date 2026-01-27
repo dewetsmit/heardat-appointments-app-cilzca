@@ -68,8 +68,8 @@ function RootLayoutNav() {
       console.log('User not authenticated, redirecting to auth');
       router.replace('/auth');
     } else if (user && inAuthGroup) {
-      console.log('User authenticated, redirecting to dashboard');
-      router.replace('/(tabs)/(home)/');
+      console.log('User authenticated, redirecting to calendar');
+      router.replace('/(tabs)/calendar');
     }
   }, [user, segments, loading, loaded]);
 
@@ -121,6 +121,27 @@ function RootLayoutNav() {
                   options={{ 
                     presentation: 'modal',
                     title: 'Create Appointment',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="new-client" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'New Client',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="search-client" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Search Client',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="room-planner" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Room Planner',
                   }} 
                 />
               </Stack>

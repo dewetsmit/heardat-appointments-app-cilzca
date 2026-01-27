@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,33 +7,36 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
-  Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import SideNav from '@/components/SideNav';
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const router = useRouter();
+  const [sideNavVisible, setSideNavVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   async function handleLogout() {
     console.log('User initiated logout');
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          console.log('Logout successful, navigating to auth');
-          router.replace('/auth');
-        },
-      },
-    ]);
+    setLogoutModalVisible(true);
+  }
+
+  async function confirmLogout() {
+    setLogoutModalVisible(false);
+    try {
+      await signOut();
+      console.log('Logout successful, navigating to auth');
+      router.replace('/auth');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   }
 
   const roleText = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User';
@@ -41,7 +44,20 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Profile</Text>
+        <TouchableOpacity
+          style={[styles.menuButton, { backgroundColor: `${theme.colors.primary}20` }]}
+          onPress={() => {
+            console.log('Menu button pressed');
+            setSideNavVisible(true);
+          }}
+        >
+          <IconSymbol
+            ios_icon_name="line.3.horizontal"
+            android_material_icon_name="menu"
+            size={24}
+            color={theme.colors.primary}
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -140,6 +156,38 @@ export default function ProfileScreen() {
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <SideNav visible={sideNavVisible} onClose={() => setSideNavVisible(false)} />
+
+      <Modal
+        visible={logoutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Logout</Text>
+            <Text style={[styles.modalMessage, { color: theme.dark ? '#98989D' : '#666' }]}>
+              Are you sure you want to logout?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: '#FF6B6B' }]}
+                onPress={confirmLogout}
+              >
+                <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -153,9 +201,12 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 48 : 16,
     paddingBottom: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  menuButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   container: {
     flex: 1,
@@ -252,6 +303,42 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+    gap: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalMessage: {
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },
