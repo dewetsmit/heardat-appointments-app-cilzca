@@ -397,7 +397,7 @@ export const getAppointmentProcedures = async (): Promise<any> => {
     
     const params: Record<string, string> = {
       Deleted: "0",
-      Active: "1",
+      Active: "1"
     };
     
     console.log('[API] Procedures request params:', params);

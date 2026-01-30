@@ -7,9 +7,6 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text style={[styles.title, { color: theme.colors.text }]}>
-        Welcome to Natively
-      </Text>
       <Text style={[styles.subtitle, { color: theme.dark ? '#98989D' : '#666' }]}>
         Your app is currently building...
       </Text>
