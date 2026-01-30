@@ -1,6 +1,6 @@
 
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -54,7 +54,7 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  useEffect(() => {
+  const handleAuthRedirect = useCallback(() => {
     if (loading || !loaded) {
       console.log('Auth loading or fonts loading...');
       return;
@@ -71,7 +71,11 @@ function RootLayoutNav() {
       console.log('User authenticated, redirecting to calendar');
       router.replace('/(tabs)/calendar');
     }
-  }, [user, segments, loading, loaded]);
+  }, [user, segments, loading, loaded, router]);
+
+  useEffect(() => {
+    handleAuthRedirect();
+  }, [handleAuthRedirect]);
 
   if (!loaded || loading) {
     return null;

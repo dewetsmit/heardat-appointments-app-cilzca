@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,13 +25,7 @@ export function AudiologistSelector() {
   const [audiologists, setAudiologists] = useState<Audiologist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (token && user) {
-      loadAudiologists();
-    }
-  }, [token, user]);
-
-  async function loadAudiologists() {
+  const loadAudiologists = useCallback(async () => {
     console.log('Loading audiologists from Heardat API...');
     setIsLoading(true);
     try {
@@ -81,7 +75,13 @@ export function AudiologistSelector() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [token, user]);
+
+  useEffect(() => {
+    if (token && user) {
+      loadAudiologists();
+    }
+  }, [token, user, loadAudiologists]);
 
   const selectedCount = selectedAudiologistIds.length;
   const allSelected = selectedCount === audiologists.length && audiologists.length > 0;

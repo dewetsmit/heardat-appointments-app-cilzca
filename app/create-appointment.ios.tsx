@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,13 +17,14 @@ import { useTheme } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { IconSymbol } from '@/components/IconSymbol';
 import { 
-  apiRequest, 
-  getAuthHeader, 
   getAllPatients, 
   getBranches, 
   getAppointmentProcedures,
   heardatApiCall,
-  getHeardatCredentials
+  getHeardatCredentials,
+  createNewAppointment,
+  formatDateForAPI,
+  formatTimeForAPI
 } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Client, Branch, Procedure, Audiologist } from '@/types';
@@ -73,11 +74,7 @@ export default function CreateAppointmentScreen() {
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadFormData();
-  }, [token]);
-
-  const loadFormData = async () => {
+  const loadFormData = useCallback(async () => {
     console.log('Loading form data for create appointment');
     if (!token) {
       console.log('No token available');
@@ -156,7 +153,11 @@ export default function CreateAppointmentScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    loadFormData();
+  }, [loadFormData]);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (selectedDate) {
@@ -173,7 +174,7 @@ export default function CreateAppointmentScreen() {
   };
 
   const handleSubmit = async () => {
-    console.log('Submit button pressed');
+    console.log('Submit button pressed - creating appointment');
 
     // Validation
     if (!selectedClient) {
@@ -193,41 +194,40 @@ export default function CreateAppointmentScreen() {
       return;
     }
 
-    // Combine date and time
-    const appointmentDateTime = new Date(date);
-    appointmentDateTime.setHours(time.getHours());
-    appointmentDateTime.setMinutes(time.getMinutes());
-    appointmentDateTime.setSeconds(0);
-    appointmentDateTime.setMilliseconds(0);
-
-    const appointmentData = {
-      client_id: selectedClient.id,
-      branch_id: selectedBranch.id,
-      procedure_id: selectedProcedure.id,
-      audiologist_id: selectedExaminer.id,
-      assistant_id: selectedAssistant?.id || null,
-      appointment_date: appointmentDateTime.toISOString(),
-      duration_minutes: duration,
-      send_reminders: sendReminders,
-      is_recurring: repeatAppointment,
-      recurrence_pattern: repeatAppointment ? 'weekly' : null,
-      notes: notes.trim() || null,
-    };
-
-    console.log('Creating appointment with data:', appointmentData);
-
     try {
       setSubmitting(true);
-      const headers = await getAuthHeader();
 
-      const response = await apiRequest('/api/appointments', {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(appointmentData),
-      });
+      // Build appointment form data matching Heardat API expectations
+      const appointmentFormData: Record<string, any> = {
+        PatientsID: selectedClient.id,
+        BranchID: selectedBranch.id,
+        ProceduresID: selectedProcedure.id,
+        UserIDAssigned: selectedExaminer.id,
+        DateAppointment: formatDateForAPI(date),
+        TimeAppointment: formatTimeForAPI(time),
+        Duration: duration.toString(),
+        Notes: notes.trim() || "",
+      };
+
+      // Add assistant if selected
+      if (selectedAssistant) {
+        appointmentFormData.AssistantID = selectedAssistant.id;
+      }
+
+      // Add optional fields
+      if (sendReminders) {
+        appointmentFormData.SendReminders = "1";
+      }
+
+      if (repeatAppointment) {
+        appointmentFormData.IsRecurring = "1";
+        appointmentFormData.RecurrencePattern = "weekly";
+      }
+
+      console.log('Creating appointment with form data:', appointmentFormData);
+
+      // Call the createNewAppointment function (matches Angular implementation)
+      const response = await createNewAppointment(appointmentFormData);
 
       console.log('Appointment created successfully:', response);
       Alert.alert('Success', 'Appointment created successfully', [
@@ -238,7 +238,8 @@ export default function CreateAppointmentScreen() {
       ]);
     } catch (error) {
       console.error('Error creating appointment:', error);
-      Alert.alert('Error', 'Failed to create appointment. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create appointment';
+      Alert.alert('Error', errorMessage);
     } finally {
       setSubmitting(false);
     }

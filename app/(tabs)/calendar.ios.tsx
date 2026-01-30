@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -51,13 +51,7 @@ export default function CalendarScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
   const [sideNavVisible, setSideNavVisible] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadAppointments();
-    }
-  }, [user, selectedAudiologistIds, selectedDate, viewMode]);
-
-  async function loadAppointments() {
+  const loadAppointments = useCallback(async () => {
     console.log('Loading appointments for calendar...');
     try {
       setIsLoading(true);
@@ -137,7 +131,13 @@ export default function CalendarScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }
+  }, [user, selectedAudiologistIds, selectedDate, viewMode, theme.colors.primary]);
+
+  useEffect(() => {
+    if (user) {
+      loadAppointments();
+    }
+  }, [user, loadAppointments]);
 
   async function handleRefresh() {
     setIsRefreshing(true);

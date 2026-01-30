@@ -148,7 +148,8 @@ export const apiCall = async <T = any>(
  */
 export const heardatApiCall = async <T = any>(
   endpoint: string,
-  additionalParams?: Record<string, string>
+  additionalParams?: Record<string, string>,
+  method: string = 'GET'
 ): Promise<T> => {
   const credentials = await getHeardatCredentials();
   
@@ -160,18 +161,16 @@ export const heardatApiCall = async <T = any>(
   const params = new URLSearchParams({
     Sessionkey: credentials.sessionKey,
     Userkey: credentials.userKey,
-    Key: credentials.userKey,
     ...(credentials.companyKey && { Companykey: credentials.companyKey }),
-    ...(credentials.userId && { UserID: credentials.userId }),
     ...additionalParams,
   });
   
   const url = `${HEARDAT_API_URL}/${endpoint}?${params.toString()}`;
-  console.log("[Heardat API] Calling:", endpoint);
+  console.log("[Heardat API] Calling:", endpoint, method);
   
   try {
     const response = await fetch(url, {
-      method: 'GET',
+      method: method,
       headers: {
         'Accept': 'application/json',
       },
@@ -189,6 +188,59 @@ export const heardatApiCall = async <T = any>(
     return data;
   } catch (error) {
     console.error("[Heardat API] Request failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * Create a new appointment in Heardat API
+ * Based on the Angular implementation
+ * 
+ * @param appointmentFormData - Appointment form data object
+ * @returns Promise with created appointment data
+ */
+export const createNewAppointment = async (
+  appointmentFormData: Record<string, any>
+): Promise<any> => {
+  try {
+    console.log('[API] Creating new appointment with data:', appointmentFormData);
+    
+    // Get current user credentials
+    const credentials = await getHeardatCredentials();
+    
+    if (!credentials.userId) {
+      throw new Error("User ID not found. Please sign in again.");
+    }
+    
+    // Build params object, filtering out empty values
+    const params: Record<string, string> = {};
+    
+    for (const [key, value] of Object.entries(appointmentFormData)) {
+      if (value !== "" && value !== null && value !== undefined) {
+        params[key] = value ? value.toString() : "";
+      }
+    }
+    
+    // Remove DateEndAppointment if it's 0 or empty
+    if (
+      Object.prototype.hasOwnProperty.call(params, "DateEndAppointment") &&
+      (params["DateEndAppointment"] === "0" || params["DateEndAppointment"] === "")
+    ) {
+      delete params["DateEndAppointment"];
+    }
+    
+    // Add UserID from current user
+    params["UserID"] = credentials.userId;
+    
+    console.log('[API] Appointment params after processing:', params);
+    
+    // Call Heardat API with POST method and params as query string
+    const data = await heardatApiCall('Appointments', params, 'POST');
+    
+    console.log('[API] Appointment created successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to create appointment:', error);
     throw error;
   }
 };
@@ -368,6 +420,15 @@ export const formatDateForAPI = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+/**
+ * Format time to HH:MM format for API calls
+ */
+export const formatTimeForAPI = (date: Date): string => {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 };
 
 /**
