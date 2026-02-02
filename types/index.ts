@@ -23,6 +23,17 @@ export interface Client {
   phone?: string;
 }
 
+export interface Patient {
+  PatientsID: string;
+  Name: string;
+  Surname: string;
+  Cell?: string;
+  Home?: string;
+  Email?: string;
+  FileNo?: string;
+  DateModified?: string;
+}
+
 export interface Branch {
   id: string;
   name: string;

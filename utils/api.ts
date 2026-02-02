@@ -246,15 +246,15 @@ export const createNewAppointment = async (
 };
 
 /**
- * Generic function to get appointments for a user
- * Can be used for current user or searched/selected users
+ * Get appointments for a user (current or searched user)
+ * Based on the Angular getAppointmentsForUser method
  * 
  * @param startDate - Optional start date in YYYY-MM-DD format
  * @param endDate - Optional end date in YYYY-MM-DD format
  * @param searchUser - Optional user object with CompanyID, BranchID, UserID
  * @returns Promise with appointments data
  */
-export const getUserAppointments = async (
+export const getAppointmentsForUser = async (
   startDate?: string,
   endDate?: string,
   searchUser?: {
@@ -264,7 +264,7 @@ export const getUserAppointments = async (
   }
 ): Promise<any> => {
   try {
-    console.log('[API] Getting user appointments', { startDate, endDate, searchUser });
+    console.log('[API] Getting appointments for user', { startDate, endDate, searchUser });
     
     // Get current user credentials if no searchUser provided
     const credentials = await getHeardatCredentials();
@@ -293,9 +293,30 @@ export const getUserAppointments = async (
     console.log('[API] Appointments fetched successfully');
     return data;
   } catch (error) {
-    console.error('[API] Failed to get user appointments:', error);
+    console.error('[API] Failed to get appointments for user:', error);
     throw error;
   }
+};
+
+/**
+ * Generic function to get appointments for a user
+ * Can be used for current user or searched/selected users
+ * 
+ * @param startDate - Optional start date in YYYY-MM-DD format
+ * @param endDate - Optional end date in YYYY-MM-DD format
+ * @param searchUser - Optional user object with CompanyID, BranchID, UserID
+ * @returns Promise with appointments data
+ */
+export const getUserAppointments = async (
+  startDate?: string,
+  endDate?: string,
+  searchUser?: {
+    CompanyID?: string;
+    BranchID?: string;
+    UserID?: string;
+  }
+): Promise<any> => {
+  return getAppointmentsForUser(startDate, endDate, searchUser);
 };
 
 /**

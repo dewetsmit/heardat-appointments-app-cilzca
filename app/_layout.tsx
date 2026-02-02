@@ -22,7 +22,7 @@ import { AppointmentProvider } from "@/contexts/AppointmentContext";
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: "auth",
+  initialRouteName: "(tabs)/calendar",
 };
 
 function RootLayoutNav() {
@@ -64,12 +64,13 @@ function RootLayoutNav() {
 
     console.log('Auth state changed:', { user: !!user, inAuthGroup, segments });
 
-    if (!user && !inAuthGroup) {
-      console.log('User not authenticated, redirecting to auth');
-      router.replace('/auth');
-    } else if (user && inAuthGroup) {
+    // Redirect logic: If user is logged in, go to calendar. If not, go to auth.
+    if (user && inAuthGroup) {
       console.log('User authenticated, redirecting to calendar');
       router.replace('/(tabs)/calendar');
+    } else if (!user && !inAuthGroup) {
+      console.log('User not authenticated, redirecting to auth');
+      router.replace('/auth');
     }
   }, [user, segments, loading, loaded, router]);
 
@@ -139,6 +140,13 @@ function RootLayoutNav() {
                   options={{ 
                     presentation: 'modal',
                     title: 'Search Client',
+                  }} 
+                />
+                <Stack.Screen 
+                  name="patient-detail" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Patient Details',
                   }} 
                 />
                 <Stack.Screen 

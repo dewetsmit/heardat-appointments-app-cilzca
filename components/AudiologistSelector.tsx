@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useAppointments } from '@/contexts/AppointmentContext';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   View,
   Text,
@@ -10,93 +11,78 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
-import { IconSymbol } from '@/components/IconSymbol';
-import { useAuth } from '@/contexts/AuthContext';
-import { useAppointments } from '@/contexts/AppointmentContext';
-import { heardatApiCall } from '@/utils/api';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Audiologist } from '@/types';
+import { IconSymbol } from '@/components/IconSymbol';
+import { heardatApiCall } from '@/utils/api';
 
 export function AudiologistSelector() {
   const theme = useTheme();
-  const { token, user } = useAuth();
-  const { selectedAudiologistIds, toggleAudiologistSelection } = useAppointments();
+  const { user } = useAuth();
+  const { selectedAudiologists, setSelectedAudiologists } = useAppointments();
 
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [audiologists, setAudiologists] = useState<Audiologist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadAudiologists = useCallback(async () => {
-    console.log('Loading audiologists from Heardat API...');
-    setIsLoading(true);
+    if (!user) {
+      console.log('User not available, skipping audiologist load');
+      return;
+    }
+
+    console.log('Loading audiologists');
     try {
-      // Build parameters matching the Angular method
-      const params: Record<string, string> = {
-        BranchId: '0',
-        CompanyID: user?.CompanyID || '',
-        Active: '1',
+      setIsLoading(true);
+
+      const params = {
         Deleted: '0',
+        Active: '1',
       };
 
-      console.log('Calling AppointmentUsers with params:', params);
-      
-      // Call Heardat API
-      const response = await heardatApiCall<any>('AppointmentUsers', params);
-      const responseJSON = JSON.parse(response);
-      console.log('AppointmentUsers response:', response);
-      
-      // Parse the response - it should contain an array of appointment users
-      let appointmentUsers = [];
+      const data = await heardatApiCall('Users', params);
+      console.log('Audiologists API response:', data);
 
-      if (responseJSON.appointmentusers && Array.isArray(responseJSON.appointmentusers)) {
-        console.log("acs")
-        appointmentUsers = responseJSON.appointmentusers;
-      } else if (Array.isArray(responseJSON)) {
-        appointmentUsers = responseJSON;
+      if (data && data.users && Array.isArray(data.users)) {
+        console.log('Audiologists loaded:', data.users.length);
+        setAudiologists(data.users);
       } else {
-        console.warn('Unexpected response format from AppointmentUsers:', responseJSON);
-        appointmentUsers = [];
+        console.log('No audiologists data in response');
+        setAudiologists([]);
       }
-      
-      // Transform Heardat appointment users to our Audiologist format
-      const transformedAudiologists: Audiologist[] = appointmentUsers.map((user: any) => ({
-        id: user.User?.toString() || user.UserID?.toString() || user.id?.toString() || '',
-        user_id: user.User?.toString() || user.UserID?.toString() || '',
-        full_name: user.FirstName + ' ' + user.LastName || 'Unknown',
-        specialization: user.Specialization || user.specialization || undefined,
-        is_active: user.Active === '1' || user.Active === 1 || user.is_active === true,
-      }));
-      
-      console.log('Transformed audiologists:', transformedAudiologists.length, 'items');
-      setAudiologists(transformedAudiologists);
     } catch (error) {
-      console.error('Failed to load audiologists from Heardat API:', error);
-      // Set empty array on error so UI doesn't break
+      console.error('Failed to load audiologists:', error);
       setAudiologists([]);
     } finally {
       setIsLoading(false);
     }
-  }, [token, user]);
+  }, [user]);
 
   useEffect(() => {
-    if (token && user) {
+    if (modalVisible) {
       loadAudiologists();
     }
-  }, [token, user, loadAudiologists]);
+  }, [modalVisible, loadAudiologists]);
 
-  const selectedCount = selectedAudiologistIds.length;
-  const allSelected = selectedCount === audiologists.length && audiologists.length > 0;
-  const buttonText =
-    selectedCount === 0
-      ? 'All Audiologists'
-      : selectedCount === 1
-      ? '1 Audiologist'
-      : `${selectedCount} Audiologists`;
+  function toggleAudiologist(audiologist: Audiologist) {
+    console.log('Toggling audiologist:', audiologist.id);
+    const isSelected = selectedAudiologists.some((a) => a.id === audiologist.id);
+
+    if (isSelected) {
+      setSelectedAudiologists(selectedAudiologists.filter((a) => a.id !== audiologist.id));
+    } else {
+      setSelectedAudiologists([...selectedAudiologists, audiologist]);
+    }
+  }
+
+  const selectedCount = selectedAudiologists.length;
+  const displayText = selectedCount === 0 ? 'All' : `${selectedCount} selected`;
 
   return (
     <React.Fragment>
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-        onPress={() => setIsModalVisible(true)}
+        style={[styles.selectorButton, { backgroundColor: `${theme.colors.primary}20` }]}
+        onPress={() => setModalVisible(true)}
       >
         <IconSymbol
           ios_icon_name="person.2.fill"
@@ -104,33 +90,32 @@ export function AudiologistSelector() {
           size={20}
           color={theme.colors.primary}
         />
-        <Text style={[styles.buttonText, { color: theme.colors.text }]}>{buttonText}</Text>
-        <IconSymbol
-          ios_icon_name="chevron.down"
-          android_material_icon_name="arrow-drop-down"
-          size={20}
-          color={theme.dark ? '#98989D' : '#666'}
-        />
+        <Text style={[styles.selectorText, { color: theme.colors.primary }]}>
+          {displayText}
+        </Text>
       </TouchableOpacity>
 
       <Modal
-        visible={isModalVisible}
+        visible={modalVisible}
+        transparent
         animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsModalVisible(false)}
+        onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Select Consultant
+                Select Audiologists
               </Text>
-              <TouchableOpacity onPress={() => setIsModalVisible(false)}>
+              <TouchableOpacity
+                style={[styles.closeButton, { backgroundColor: `${theme.colors.primary}20` }]}
+                onPress={() => setModalVisible(false)}
+              >
                 <IconSymbol
-                  ios_icon_name="xmark.circle.fill"
+                  ios_icon_name="xmark"
                   android_material_icon_name="close"
-                  size={28}
-                  color={theme.dark ? '#98989D' : '#666'}
+                  size={24}
+                  color={theme.colors.primary}
                 />
               </TouchableOpacity>
             </View>
@@ -138,9 +123,18 @@ export function AudiologistSelector() {
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                  Loading audiologists...
+                </Text>
               </View>
             ) : audiologists.length === 0 ? (
               <View style={styles.emptyContainer}>
+                <IconSymbol
+                  ios_icon_name="person.slash"
+                  android_material_icon_name="person-off"
+                  size={48}
+                  color={theme.dark ? '#98989D' : '#666'}
+                />
                 <Text style={[styles.emptyText, { color: theme.dark ? '#98989D' : '#666' }]}>
                   No audiologists found
                 </Text>
@@ -148,34 +142,42 @@ export function AudiologistSelector() {
             ) : (
               <ScrollView style={styles.audiologistList}>
                 {audiologists.map((audiologist) => {
-                  const isSelected = selectedAudiologistIds.includes(audiologist.id);
+                  const isSelected = selectedAudiologists.some((a) => a.id === audiologist.id);
+
                   return (
                     <TouchableOpacity
                       key={audiologist.id}
                       style={[
                         styles.audiologistItem,
-                        { borderBottomColor: theme.colors.border },
+                        isSelected && { backgroundColor: `${theme.colors.primary}10` },
                       ]}
-                      onPress={() => toggleAudiologistSelection(audiologist.id)}
+                      onPress={() => toggleAudiologist(audiologist)}
                     >
                       <View style={styles.audiologistInfo}>
+                        <View
+                          style={[
+                            styles.audiologistIcon,
+                            { backgroundColor: `${theme.colors.primary}20` },
+                          ]}
+                        >
+                          <IconSymbol
+                            ios_icon_name="person.fill"
+                            android_material_icon_name="person"
+                            size={24}
+                            color={theme.colors.primary}
+                          />
+                        </View>
                         <Text style={[styles.audiologistName, { color: theme.colors.text }]}>
                           {audiologist.full_name}
                         </Text>
-                        {audiologist.specialization && (
-                          <Text
-                            style={[styles.audiologistSpecialization, { color: theme.dark ? '#98989D' : '#666' }]}
-                          >
-                            {audiologist.specialization}
-                          </Text>
-                        )}
                       </View>
+
                       <View
                         style={[
                           styles.checkbox,
                           {
-                            backgroundColor: isSelected ? theme.colors.primary : 'transparent',
                             borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                            backgroundColor: isSelected ? theme.colors.primary : 'transparent',
                           },
                         ]}
                       >
@@ -193,13 +195,6 @@ export function AudiologistSelector() {
                 })}
               </ScrollView>
             )}
-
-            <TouchableOpacity
-              style={[styles.doneButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setIsModalVisible(false)}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -208,16 +203,15 @@ export function AudiologistSelector() {
 }
 
 const styles = StyleSheet.create({
-  button: {
+  selectorButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
     gap: 6,
   },
-  buttonText: {
+  selectorText: {
     fontSize: 14,
     fontWeight: '600',
   },
@@ -229,71 +223,79 @@ const styles = StyleSheet.create({
   modalContent: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
     maxHeight: '80%',
-    paddingBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
   },
-  loadingContainer: {
-    padding: 40,
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyContainer: {
-    padding: 40,
+  loadingContainer: {
+    paddingVertical: 60,
     alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+  },
+  emptyContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    gap: 16,
   },
   emptyText: {
     fontSize: 16,
   },
   audiologistList: {
-    maxHeight: 400,
+    paddingHorizontal: 20,
   },
   audiologistItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
   },
   audiologistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
-    gap: 4,
+  },
+  audiologistIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   audiologistName: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  audiologistSpecialization: {
-    fontSize: 14,
+    fontWeight: '500',
   },
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButton: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    paddingVertical: 14,
     borderRadius: 12,
+    borderWidth: 2,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  doneButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
