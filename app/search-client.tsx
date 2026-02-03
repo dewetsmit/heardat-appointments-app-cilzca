@@ -41,31 +41,31 @@ export default function SearchClientScreen() {
 
   const loadPatients = useCallback(async () => {
     if (!user || !user.BranchID) {
-      console.log('User or BranchID not available');
+      console.log('[SearchClient] User or BranchID not available');
       setError('User information not available. Please sign in again.');
       setIsLoading(false);
       return;
     }
 
-    console.log('Loading patients for branch:', user.BranchID);
+    console.log('[SearchClient] Loading patients for branch:', user.BranchID);
     try {
       setIsLoading(true);
       setError(null);
 
       const data = await getAllPatients(user.BranchID, '');
-      console.log('Patients API response:', data);
+      console.log('[SearchClient] Patients API response:', data);
 
       if (data && data.patients && Array.isArray(data.patients)) {
-        console.log('Patients loaded:', data.patients.length);
+        console.log('[SearchClient] Patients loaded:', data.patients.length);
         setPatients(data.patients);
         setFilteredPatients(data.patients);
       } else {
-        console.log('No patients data in response');
+        console.log('[SearchClient] No patients data in response');
         setPatients([]);
         setFilteredPatients([]);
       }
     } catch (err: any) {
-      console.error('Failed to load patients:', err);
+      console.error('[SearchClient] Failed to load patients:', err);
       setError(err.message || 'Failed to load patients. Please try again.');
     } finally {
       setIsLoading(false);
@@ -73,6 +73,7 @@ export default function SearchClientScreen() {
   }, [user]);
 
   useEffect(() => {
+    console.log('[SearchClient] Component mounted, loading patients');
     loadPatients();
   }, [loadPatients]);
 
@@ -95,17 +96,30 @@ export default function SearchClientScreen() {
       );
     });
 
-    console.log('Filtered patients:', filtered.length, 'for query:', searchQuery);
+    console.log('[SearchClient] Filtered patients:', filtered.length, 'for query:', searchQuery);
     setFilteredPatients(filtered);
   }, [searchQuery, patients]);
 
   function handlePatientPress(patient: Patient) {
-    console.log('Patient selected:', patient.PatientsID);
+    console.log('[SearchClient] Patient selected:', patient.PatientsID, patient.Name, patient.Surname);
     router.push({
       pathname: '/patient-detail',
       params: { patientId: patient.PatientsID },
     });
   }
+
+  const fullNameDisplay = (patient: Patient) => {
+    const fullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
+    return fullName || 'Unknown Patient';
+  };
+
+  const fileNoDisplay = (patient: Patient) => {
+    return patient.FileNo ? `File: ${patient.FileNo}` : '';
+  };
+
+  const cellDisplay = (patient: Patient) => {
+    return patient.Cell || '';
+  };
 
   return (
     <SafeAreaView
@@ -171,7 +185,9 @@ export default function SearchClientScreen() {
               style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
               onPress={loadPatients}
             >
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>
+                Retry
+              </Text>
             </TouchableOpacity>
           </View>
         ) : filteredPatients.length === 0 ? (
@@ -197,8 +213,9 @@ export default function SearchClientScreen() {
             ]}
           >
             {filteredPatients.map((patient) => {
-              const fullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
-              const displayName = fullName || 'Unknown Patient';
+              const displayName = fullNameDisplay(patient);
+              const fileNo = fileNoDisplay(patient);
+              const cell = cellDisplay(patient);
               
               return (
                 <TouchableOpacity
@@ -226,7 +243,7 @@ export default function SearchClientScreen() {
                     <Text style={[styles.patientName, { color: theme.colors.text }]}>
                       {displayName}
                     </Text>
-                    {patient.FileNo && (
+                    {fileNo && (
                       <View style={styles.infoRow}>
                         <IconSymbol
                           ios_icon_name="doc.text"
@@ -235,11 +252,11 @@ export default function SearchClientScreen() {
                           color={theme.dark ? '#98989D' : '#666'}
                         />
                         <Text style={[styles.infoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                          File: {patient.FileNo}
+                          {fileNo}
                         </Text>
                       </View>
                     )}
-                    {patient.Cell && (
+                    {cell && (
                       <View style={styles.infoRow}>
                         <IconSymbol
                           ios_icon_name="phone.fill"
@@ -248,7 +265,7 @@ export default function SearchClientScreen() {
                           color={theme.dark ? '#98989D' : '#666'}
                         />
                         <Text style={[styles.infoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                          {patient.Cell}
+                          {cell}
                         </Text>
                       </View>
                     )}

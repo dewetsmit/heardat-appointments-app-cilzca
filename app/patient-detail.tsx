@@ -35,6 +35,8 @@ interface Appointment {
   Duration?: number;
   Notes?: string;
   Status?: string;
+  ClientID?: string;
+  ClientName?: string;
 }
 
 export default function PatientDetailScreen() {
@@ -52,30 +54,30 @@ export default function PatientDetailScreen() {
 
   const loadPatientDetails = useCallback(async () => {
     if (!patientId) {
-      console.log('No patient ID provided');
+      console.log('[PatientDetail] No patient ID provided');
       setError('Patient ID not provided');
       setIsLoading(false);
       return;
     }
 
-    console.log('Loading patient details for ID:', patientId);
+    console.log('[PatientDetail] Loading patient details for ID:', patientId);
     try {
       setIsLoading(true);
       setError(null);
 
       const data = await getSelectedPatient(patientId);
-      console.log('Patient API response:', data);
+      console.log('[PatientDetail] Patient API response:', data);
 
       if (data && data.patients && Array.isArray(data.patients) && data.patients.length > 0) {
         const patientData = data.patients[0];
-        console.log('Patient loaded:', patientData);
+        console.log('[PatientDetail] Patient loaded:', patientData);
         setPatient(patientData);
       } else {
-        console.log('No patient data in response');
+        console.log('[PatientDetail] No patient data in response');
         setError('Patient not found');
       }
     } catch (err: any) {
-      console.error('Failed to load patient details:', err);
+      console.error('[PatientDetail] Failed to load patient details:', err);
       setError(err.message || 'Failed to load patient details. Please try again.');
     } finally {
       setIsLoading(false);
@@ -84,49 +86,47 @@ export default function PatientDetailScreen() {
 
   const loadPatientAppointments = useCallback(async () => {
     if (!patient || !user) {
-      console.log('Patient or user not available for appointments');
+      console.log('[PatientDetail] Patient or user not available for appointments');
       return;
     }
 
-    console.log('Loading appointments for patient:', patient.PatientsID);
+    console.log('[PatientDetail] Loading appointments for patient:', patient.PatientsID);
     try {
       setIsLoadingAppointments(true);
 
-      // Get appointments for this patient
-      // Note: The Heardat API doesn't have a direct patient filter, so we'll fetch all and filter
       const data = await getUserAppointments();
-      console.log('Appointments API response:', data);
+      console.log('[PatientDetail] Appointments API response:', data);
 
       if (data && data.appointments && Array.isArray(data.appointments)) {
-        // Filter appointments for this patient by matching ClientID or ClientName
         const patientFullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
-        const patientAppointments = data.appointments.filter((apt: any) => {
+        const patientAppointments = data.appointments.filter((apt: Appointment) => {
           return (
             apt.ClientID === patient.PatientsID ||
             apt.ClientName === patientFullName
           );
         });
 
-        console.log('Patient appointments loaded:', patientAppointments.length);
+        console.log('[PatientDetail] Patient appointments loaded:', patientAppointments.length);
         setAppointments(patientAppointments);
       } else {
-        console.log('No appointments data in response');
+        console.log('[PatientDetail] No appointments data in response');
         setAppointments([]);
       }
     } catch (err: any) {
-      console.error('Failed to load patient appointments:', err);
-      // Don't show error for appointments, just log it
+      console.error('[PatientDetail] Failed to load patient appointments:', err);
     } finally {
       setIsLoadingAppointments(false);
     }
   }, [patient, user]);
 
   useEffect(() => {
+    console.log('[PatientDetail] Component mounted, loading patient details');
     loadPatientDetails();
   }, [loadPatientDetails]);
 
   useEffect(() => {
     if (patient) {
+      console.log('[PatientDetail] Patient loaded, loading appointments');
       loadPatientAppointments();
     }
   }, [loadPatientAppointments, patient]);
@@ -146,7 +146,7 @@ export default function PatientDetailScreen() {
         return `${displayHours}:${minutes} ${ampm}`;
       }
     } catch (err) {
-      console.error('Error formatting time:', err);
+      console.error('[PatientDetail] Error formatting time:', err);
     }
 
     return timeString;
@@ -166,7 +166,7 @@ export default function PatientDetailScreen() {
         year: 'numeric',
       });
     } catch (err) {
-      console.error('Error formatting date:', err);
+      console.error('[PatientDetail] Error formatting date:', err);
       return dateString;
     }
   }
@@ -221,7 +221,9 @@ export default function PatientDetailScreen() {
             style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
             onPress={loadPatientDetails}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>
+              Retry
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -230,6 +232,12 @@ export default function PatientDetailScreen() {
 
   const fullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
   const displayName = fullName || 'Unknown Patient';
+  const cellValue = patient.Cell || '';
+  const homeValue = patient.Home || '';
+  const emailValue = patient.Email || '';
+  const fileNoValue = patient.FileNo || '';
+  const dateModifiedValue = patient.DateModified ? formatDate(patient.DateModified) : '';
+  const patientIdValue = patient.PatientsID || '';
 
   return (
     <SafeAreaView
@@ -273,7 +281,7 @@ export default function PatientDetailScreen() {
               Contact Information
             </Text>
 
-            {patient.Cell && (
+            {cellValue && (
               <View style={styles.detailRow}>
                 <View style={styles.detailIcon}>
                   <IconSymbol
@@ -288,13 +296,13 @@ export default function PatientDetailScreen() {
                     Cell
                   </Text>
                   <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {patient.Cell}
+                    {cellValue}
                   </Text>
                 </View>
               </View>
             )}
 
-            {patient.Home && (
+            {homeValue && (
               <View style={styles.detailRow}>
                 <View style={styles.detailIcon}>
                   <IconSymbol
@@ -309,13 +317,13 @@ export default function PatientDetailScreen() {
                     Home
                   </Text>
                   <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {patient.Home}
+                    {homeValue}
                   </Text>
                 </View>
               </View>
             )}
 
-            {patient.Email && (
+            {emailValue && (
               <View style={styles.detailRow}>
                 <View style={styles.detailIcon}>
                   <IconSymbol
@@ -330,13 +338,13 @@ export default function PatientDetailScreen() {
                     Email
                   </Text>
                   <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {patient.Email}
+                    {emailValue}
                   </Text>
                 </View>
               </View>
             )}
 
-            {patient.FileNo && (
+            {fileNoValue && (
               <View style={styles.detailRow}>
                 <View style={styles.detailIcon}>
                   <IconSymbol
@@ -351,13 +359,13 @@ export default function PatientDetailScreen() {
                     File No
                   </Text>
                   <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {patient.FileNo}
+                    {fileNoValue}
                   </Text>
                 </View>
               </View>
             )}
 
-            {patient.DateModified && (
+            {dateModifiedValue && (
               <View style={styles.detailRow}>
                 <View style={styles.detailIcon}>
                   <IconSymbol
@@ -372,7 +380,7 @@ export default function PatientDetailScreen() {
                     Last Modified
                   </Text>
                   <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {formatDate(patient.DateModified)}
+                    {dateModifiedValue}
                   </Text>
                 </View>
               </View>
@@ -392,7 +400,7 @@ export default function PatientDetailScreen() {
                   Patient ID
                 </Text>
                 <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                  {patient.PatientsID}
+                  {patientIdValue}
                 </Text>
               </View>
             </View>
@@ -426,6 +434,9 @@ export default function PatientDetailScreen() {
               {appointments.map((appointment) => {
                 const dateText = formatDate(appointment.DateAppointment);
                 const timeText = formatTime(appointment.TimeAppointment);
+                const userName = appointment.UserName || '';
+                const duration = appointment.Duration ? `${appointment.Duration} minutes` : '';
+                const notes = appointment.Notes || '';
 
                 return (
                   <View
@@ -441,7 +452,7 @@ export default function PatientDetailScreen() {
                       </Text>
                     </View>
 
-                    {appointment.UserName && (
+                    {userName && (
                       <View style={styles.appointmentDetail}>
                         <IconSymbol
                           ios_icon_name="person.fill"
@@ -450,12 +461,12 @@ export default function PatientDetailScreen() {
                           color={theme.dark ? '#98989D' : '#666'}
                         />
                         <Text style={[styles.appointmentDetailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                          {appointment.UserName}
+                          {userName}
                         </Text>
                       </View>
                     )}
 
-                    {appointment.Duration && (
+                    {duration && (
                       <View style={styles.appointmentDetail}>
                         <IconSymbol
                           ios_icon_name="clock"
@@ -464,12 +475,12 @@ export default function PatientDetailScreen() {
                           color={theme.dark ? '#98989D' : '#666'}
                         />
                         <Text style={[styles.appointmentDetailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                          {appointment.Duration} minutes
+                          {duration}
                         </Text>
                       </View>
                     )}
 
-                    {appointment.Notes && (
+                    {notes && (
                       <View style={styles.appointmentDetail}>
                         <IconSymbol
                           ios_icon_name="note.text"
@@ -478,7 +489,7 @@ export default function PatientDetailScreen() {
                           color={theme.dark ? '#98989D' : '#666'}
                         />
                         <Text style={[styles.appointmentDetailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                          {appointment.Notes}
+                          {notes}
                         </Text>
                       </View>
                     )}
