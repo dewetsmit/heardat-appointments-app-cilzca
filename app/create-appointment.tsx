@@ -90,7 +90,15 @@ export default function CreateAppointmentScreen() {
       const branchId = credentials.branchId || "0";
       
       console.log('Loading data with branchId:', branchId);
-
+      await getAppointmentProcedures().then(res => {
+        res.forEach((proc: any) => {
+          console.log('item',{
+        id: proc.ProceduresID || proc.id,
+        name: proc.ProcedureName || proc.Name || 'Unknown',
+        description: proc.Description || proc.description,
+        duration_minutes: proc.Duration || proc.duration_minutes || 30,
+        });
+      });});
       // Load clients, branches, and procedures from Heardat API
       // Load audiologists from Heardat API (AppointmentUsers endpoint)
       const [clientsRes, branchesRes, proceduresRes, audiologistsRes] = await Promise.all([

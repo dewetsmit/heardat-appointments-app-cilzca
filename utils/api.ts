@@ -341,14 +341,15 @@ export const getAllPatients = async (
       BranchID: branchId,
       UserID: credentials.userId || "0",
       Search: search,
+      CompanyID: credentials.companyId || "0"
     };
     
     console.log('[API] Patients request params:', params);
     
     const data = await heardatApiCall('Patients', params);
     
-    console.log('[API] Patients fetched successfully');
-    return data;
+    console.log('[API] Patients fetched successfully', JSON.parse(data));
+    return JSON.parse(data).patients;
   } catch (error) {
     console.error('[API] Failed to get patients:', error);
     throw error;
@@ -389,18 +390,19 @@ export const getSelectedPatient = async (patientId: string): Promise<any> => {
 export const getBranches = async (): Promise<any> => {
   try {
     console.log('[API] Getting branches');
-    
+    const credentials = await getHeardatCredentials();
     const params: Record<string, string> = {
       Deleted: "0",
       Active: "1",
+      CompanyID: credentials.companyId || "0"
     };
     
     console.log('[API] Branches request params:', params);
     
     const data = await heardatApiCall('Branch', params);
     
-    console.log('[API] Branches fetched successfully');
-    return data;
+    console.log('[API] Branches fetched successfully', JSON.parse(data));
+    return JSON.parse(data).branch;
   } catch (error) {
     console.error('[API] Failed to get branches:', error);
     throw error;
@@ -415,18 +417,19 @@ export const getBranches = async (): Promise<any> => {
 export const getAppointmentProcedures = async (): Promise<any> => {
   try {
     console.log('[API] Getting appointment procedures');
-    
+    const companyID = await storage.getItem('CurrentUser').then(res => res ? JSON.parse(res).CompanyID : 'No User ID');
     const params: Record<string, string> = {
       Deleted: "0",
-      Active: "1"
+      Active: "1",
+      CompanyID: companyID
     };
     
     console.log('[API] Procedures request params:', params);
     
     const data = await heardatApiCall('Procedures', params);
     
-    console.log('[API] Procedures fetched successfully');
-    return data;
+    console.log('[API] Procedures fetched successfully', JSON.parse(data));
+    return JSON.parse(data).procedures;
   } catch (error) {
     console.error('[API] Failed to get procedures:', error);
     throw error;

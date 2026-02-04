@@ -75,7 +75,7 @@ export function AudiologistSelector() {
     }
   }
 
-  const selectedCount = selectedAudiologists.length;
+  const selectedCount = selectedAudiologists?.length;
   const displayText = selectedCount === 0 ? 'All' : `${selectedCount} selected`;
 
   return (
