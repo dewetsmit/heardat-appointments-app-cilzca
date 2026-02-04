@@ -75,9 +75,9 @@ export default function CreateAppointmentScreen() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
   const loadFormData = useCallback(async () => {
-    console.log('Loading form data for create appointment');
+    console.log('[CreateAppointment] Loading form data');
     if (!token) {
-      console.log('No token available');
+      console.log('[CreateAppointment] No token available');
       return;
     }
 
@@ -88,57 +88,58 @@ export default function CreateAppointmentScreen() {
       const credentials = await getHeardatCredentials();
       const branchId = credentials.branchId || "0";
       
-      console.log('Loading data with branchId:', branchId);
+      console.log('[CreateAppointment] Loading data with branchId:', branchId);
 
-      // Load clients, branches, and procedures from Heardat API
-      // Load audiologists from Heardat API (AppointmentUsers endpoint)
+      // Load clients, branches, procedures, and audiologists from Heardat API
       const [clientsRes, branchesRes, proceduresRes, audiologistsRes] = await Promise.all([
         getAllPatients(branchId, ''),
         getBranches(),
         getAppointmentProcedures(),
-        heardatApiCall('AppointmentUsers', {
-          BranchId: "0",
+        heardatApiCall('Users', {
           CompanyID: credentials.companyId || "0",
           Active: "1",
           Deleted: "0"
         }),
       ]);
 
-      console.log('Form data loaded from Heardat API:', {
+      console.log('[CreateAppointment] Form data loaded from Heardat API:', {
         clients: clientsRes?.length || 0,
         branches: branchesRes?.length || 0,
         procedures: proceduresRes?.length || 0,
-        audiologists: audiologistsRes?.length || 0,
+        audiologists: audiologistsRes?.users?.length || 0,
       });
 
       // Map Heardat API responses to our Client, Branch, Procedure types
       const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
         id: patient.PatientsID || patient.id,
-        name: patient.Name || patient.FullName || 'Unknown',
+        name: `${patient.Name || ''} ${patient.Surname || ''}`.trim() || 'Unknown',
         email: patient.Email || patient.email,
-        phone: patient.Phone || patient.phone,
+        phone: patient.Cell || patient.phone,
       }));
 
       const mappedBranches: Branch[] = (branchesRes || []).map((branch: any) => ({
         id: branch.BranchID || branch.id,
-        name: branch.BranchName || branch.Name || 'Unknown',
+        name: branch.Name || 'Unknown',
         address: branch.Address || branch.address,
       }));
 
       const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => ({
         id: proc.ProceduresID || proc.id,
-        name: proc.ProcedureName || proc.Name || 'Unknown',
+        name: proc.Name || 'Unknown',
         description: proc.Description || proc.description,
         duration_minutes: proc.Duration || proc.duration_minutes || 30,
       }));
 
-      const mappedAudiologists: Audiologist[] = (audiologistsRes || []).map((user: any) => ({
+      // Map audiologists from Users endpoint
+      const mappedAudiologists: Audiologist[] = (audiologistsRes?.users || []).map((user: any) => ({
         id: user.UserID?.toString() || user.id,
         user_id: user.UserID?.toString() || user.id,
-        full_name: user.FullName || user.Name || 'Unknown',
+        full_name: user.Name || user.FullName || 'Unknown',
         specialization: user.Specialization || user.specialization,
         is_active: user.Active === "1" || user.is_active === true,
       }));
+
+      console.log('[CreateAppointment] Mapped audiologists:', mappedAudiologists.length);
 
       setClients(mappedClients);
       setBranches(mappedBranches);
@@ -146,9 +147,11 @@ export default function CreateAppointmentScreen() {
       setExaminers(mappedAudiologists);
       setAssistants(mappedAudiologists); // Use same list for assistants
       
-      console.log('Form data mapped and set successfully');
+      console.log('[CreateAppointment] Form data mapped and set successfully');
+      console.log('[CreateAppointment] Examiners available:', mappedAudiologists.length);
+      console.log('[CreateAppointment] Assistants available:', mappedAudiologists.length);
     } catch (error) {
-      console.error('Error loading form data:', error);
+      console.error('[CreateAppointment] Error loading form data:', error);
       Alert.alert('Error', 'Failed to load form data. Please try again.');
     } finally {
       setLoading(false);
@@ -162,19 +165,19 @@ export default function CreateAppointmentScreen() {
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (selectedDate) {
       setDate(selectedDate);
-      console.log('Date selected:', selectedDate.toISOString());
+      console.log('[CreateAppointment] Date selected:', selectedDate.toISOString());
     }
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {
     if (selectedTime) {
       setTime(selectedTime);
-      console.log('Time selected:', selectedTime.toISOString());
+      console.log('[CreateAppointment] Time selected:', selectedTime.toISOString());
     }
   };
 
   const handleSubmit = async () => {
-    console.log('Submit button pressed - creating appointment');
+    console.log('[CreateAppointment] Submit button pressed - creating appointment');
 
     // Validation
     if (!selectedClient) {
@@ -224,12 +227,12 @@ export default function CreateAppointmentScreen() {
         appointmentFormData.RecurrencePattern = "weekly";
       }
 
-      console.log('Creating appointment with form data:', appointmentFormData);
+      console.log('[CreateAppointment] Creating appointment with form data:', appointmentFormData);
 
       // Call the createNewAppointment function (matches Angular implementation)
       const response = await createNewAppointment(appointmentFormData);
 
-      console.log('Appointment created successfully:', response);
+      console.log('[CreateAppointment] Appointment created successfully:', response);
       Alert.alert('Success', 'Appointment created successfully', [
         {
           text: 'OK',
@@ -237,7 +240,7 @@ export default function CreateAppointmentScreen() {
         },
       ]);
     } catch (error) {
-      console.error('Error creating appointment:', error);
+      console.error('[CreateAppointment] Error creating appointment:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create appointment';
       Alert.alert('Error', errorMessage);
     } finally {
@@ -291,7 +294,7 @@ export default function CreateAppointmentScreen() {
         <TouchableOpacity
           style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => {
-            console.log(`Dropdown ${dropdownKey} pressed`);
+            console.log(`[CreateAppointment] Dropdown ${dropdownKey} pressed`);
             setActiveDropdown(isOpen ? null : dropdownKey);
           }}
         >
@@ -319,33 +322,41 @@ export default function CreateAppointmentScreen() {
           >
             <View style={[styles.dropdownModal, { backgroundColor: colors.card }]}>
               <ScrollView style={styles.dropdownList}>
-                {options.map((option, index) => (
-                  <React.Fragment key={option.id}>
-                    <TouchableOpacity
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        console.log(`Selected ${dropdownKey}:`, option.label);
-                        onSelect(option);
-                        setActiveDropdown(null);
-                      }}
-                    >
-                      <Text style={[styles.dropdownItemText, { color: colors.text }]}>
-                        {option.label}
-                      </Text>
-                      {value?.id === option.id && (
-                        <IconSymbol
-                          ios_icon_name="checkmark"
-                          android_material_icon_name="check"
-                          size={20}
-                          color="#4A90E2"
-                        />
+                {options.length === 0 ? (
+                  <View style={styles.emptyDropdown}>
+                    <Text style={[styles.emptyDropdownText, { color: colors.text + '80' }]}>
+                      No options available
+                    </Text>
+                  </View>
+                ) : (
+                  options.map((option, index) => (
+                    <React.Fragment key={option.id}>
+                      <TouchableOpacity
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          console.log(`[CreateAppointment] Selected ${dropdownKey}:`, option.label);
+                          onSelect(option);
+                          setActiveDropdown(null);
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, { color: colors.text }]}>
+                          {option.label}
+                        </Text>
+                        {value?.id === option.id && (
+                          <IconSymbol
+                            ios_icon_name="checkmark"
+                            android_material_icon_name="check"
+                            size={20}
+                            color="#4A90E2"
+                          />
+                        )}
+                      </TouchableOpacity>
+                      {index < options.length - 1 && (
+                        <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
                       )}
-                    </TouchableOpacity>
-                    {index < options.length - 1 && (
-                      <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
-                    )}
-                  </React.Fragment>
-                ))}
+                    </React.Fragment>
+                  ))
+                )}
               </ScrollView>
             </View>
           </TouchableOpacity>
@@ -382,6 +393,14 @@ export default function CreateAppointmentScreen() {
   const examinerOptions: DropdownOption[] = examiners.map(e => ({ id: e.id, label: e.full_name }));
   const assistantOptions: DropdownOption[] = assistants.map(a => ({ id: a.id, label: a.full_name }));
 
+  console.log('[CreateAppointment] Rendering form with options:', {
+    clients: clientOptions.length,
+    branches: branchOptions.length,
+    procedures: procedureOptions.length,
+    examiners: examinerOptions.length,
+    assistants: assistantOptions.length,
+  });
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <Stack.Screen
@@ -399,7 +418,7 @@ export default function CreateAppointmentScreen() {
           <TouchableOpacity
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
-              console.log('Date picker button tapped');
+              console.log('[CreateAppointment] Date picker button tapped');
               setShowDatePicker(!showDatePicker);
             }}
           >
@@ -429,7 +448,7 @@ export default function CreateAppointmentScreen() {
           <TouchableOpacity
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
-              console.log('Time picker button tapped');
+              console.log('[CreateAppointment] Time picker button tapped');
               setShowTimePicker(!showTimePicker);
             }}
           >
@@ -480,7 +499,7 @@ export default function CreateAppointmentScreen() {
             const procedure = procedures.find(p => p.id === option.id);
             if (procedure) {
               setDuration(procedure.duration_minutes);
-              console.log('Procedure selected, duration set to:', procedure.duration_minutes);
+              console.log('[CreateAppointment] Procedure selected, duration set to:', procedure.duration_minutes);
             }
           },
           'procedure'
@@ -510,7 +529,7 @@ export default function CreateAppointmentScreen() {
           <TouchableOpacity
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
-              console.log('Duration picker opened');
+              console.log('[CreateAppointment] Duration picker opened');
               setShowDurationPicker(true);
             }}
           >
@@ -544,7 +563,7 @@ export default function CreateAppointmentScreen() {
                       <TouchableOpacity
                         style={styles.dropdownItem}
                         onPress={() => {
-                          console.log('Duration selected:', mins);
+                          console.log('[CreateAppointment] Duration selected:', mins);
                           setDuration(mins);
                           setShowDurationPicker(false);
                         }}
@@ -583,7 +602,7 @@ export default function CreateAppointmentScreen() {
                 { borderColor: colors.border }
               ]}
               onPress={() => {
-                console.log('Send reminders toggled:', !sendReminders);
+                console.log('[CreateAppointment] Send reminders toggled:', !sendReminders);
                 setSendReminders(!sendReminders);
               }}
             >
@@ -608,7 +627,7 @@ export default function CreateAppointmentScreen() {
                 { borderColor: colors.border }
               ]}
               onPress={() => {
-                console.log('Repeat appointment toggled:', !repeatAppointment);
+                console.log('[CreateAppointment] Repeat appointment toggled:', !repeatAppointment);
                 setRepeatAppointment(!repeatAppointment);
               }}
             >
@@ -742,6 +761,13 @@ const styles = StyleSheet.create({
   dropdownDivider: {
     height: 1,
     marginHorizontal: 20,
+  },
+  emptyDropdown: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyDropdownText: {
+    fontSize: 16,
   },
   toggleRow: {
     flexDirection: 'row',

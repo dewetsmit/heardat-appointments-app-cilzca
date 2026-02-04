@@ -19,7 +19,7 @@ import { heardatApiCall } from '@/utils/api';
 export function AudiologistSelector() {
   const theme = useTheme();
   const { user } = useAuth();
-  const { selectedAudiologists, setSelectedAudiologists } = useAppointments();
+  const { selectedAudiologists, setSelectedAudiologists, toggleAudiologistSelection } = useAppointments();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [audiologists, setAudiologists] = useState<Audiologist[]>([]);
@@ -44,8 +44,22 @@ export function AudiologistSelector() {
       console.log('Audiologists API response:', data);
 
       if (data && data.users && Array.isArray(data.users)) {
-        console.log('Audiologists loaded:', data.users.length);
-        setAudiologists(data.users);
+        const mappedAudiologists: Audiologist[] = data.users.map((user: any) => ({
+          id: user.UserID?.toString() || user.id,
+          user_id: user.UserID?.toString() || user.id,
+          full_name: user.Name || user.FullName || 'Unknown',
+          specialization: user.Specialization || '',
+          is_active: user.Active === '1' || user.is_active === true,
+        }));
+        
+        console.log('Audiologists loaded:', mappedAudiologists.length);
+        setAudiologists(mappedAudiologists);
+        
+        // Initialize selectedAudiologists if empty
+        if (!selectedAudiologists || selectedAudiologists.length === 0) {
+          console.log('Initializing selectedAudiologists with all audiologists');
+          setSelectedAudiologists(mappedAudiologists);
+        }
       } else {
         console.log('No audiologists data in response');
         setAudiologists([]);
@@ -56,7 +70,7 @@ export function AudiologistSelector() {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, selectedAudiologists, setSelectedAudiologists]);
 
   useEffect(() => {
     if (modalVisible) {
@@ -64,25 +78,18 @@ export function AudiologistSelector() {
     }
   }, [modalVisible, loadAudiologists]);
 
-  function toggleAudiologist(audiologist: Audiologist) {
-    console.log('Toggling audiologist:', audiologist.id);
-    const isSelected = selectedAudiologists.some((a) => a.id === audiologist.id);
-
-    if (isSelected) {
-      setSelectedAudiologists(selectedAudiologists.filter((a) => a.id !== audiologist.id));
-    } else {
-      setSelectedAudiologists([...selectedAudiologists, audiologist]);
-    }
-  }
-
-  const selectedCount = selectedAudiologists?.length;
+  // Ensure selectedAudiologists is always an array
+  const selectedCount = (selectedAudiologists || []).length;
   const displayText = selectedCount === 0 ? 'All' : `${selectedCount} selected`;
 
   return (
     <React.Fragment>
       <TouchableOpacity
         style={[styles.selectorButton, { backgroundColor: `${theme.colors.primary}20` }]}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          console.log('Audiologist selector button pressed');
+          setModalVisible(true);
+        }}
       >
         <IconSymbol
           ios_icon_name="person.2.fill"
@@ -109,7 +116,10 @@ export function AudiologistSelector() {
               </Text>
               <TouchableOpacity
                 style={[styles.closeButton, { backgroundColor: `${theme.colors.primary}20` }]}
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  console.log('Closing audiologist selector modal');
+                  setModalVisible(false);
+                }}
               >
                 <IconSymbol
                   ios_icon_name="xmark"
@@ -142,7 +152,7 @@ export function AudiologistSelector() {
             ) : (
               <ScrollView style={styles.audiologistList}>
                 {audiologists.map((audiologist) => {
-                  const isSelected = selectedAudiologists.some((a) => a.id === audiologist.id);
+                  const isSelected = (selectedAudiologists || []).some((a) => a.id === audiologist.id);
 
                   return (
                     <TouchableOpacity
@@ -151,7 +161,10 @@ export function AudiologistSelector() {
                         styles.audiologistItem,
                         isSelected && { backgroundColor: `${theme.colors.primary}10` },
                       ]}
-                      onPress={() => toggleAudiologist(audiologist)}
+                      onPress={() => {
+                        console.log('Toggling audiologist:', audiologist.full_name);
+                        toggleAudiologistSelection(audiologist);
+                      }}
                     >
                       <View style={styles.audiologistInfo}>
                         <View

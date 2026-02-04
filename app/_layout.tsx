@@ -69,8 +69,12 @@ function RootLayoutNav() {
       console.log('User authenticated, redirecting to calendar');
       router.replace('/(tabs)/calendar');
     } else if (!user && !inAuthGroup) {
-      console.log('User not authenticated, redirecting to auth');
+      console.log('User not authenticated (session expired), redirecting to auth');
       router.replace('/auth');
+      // Show session expired message after a brief delay to ensure navigation completes
+      setTimeout(() => {
+        Alert.alert('Session Expired', 'Your session has expired. Please sign in again.');
+      }, 500);
     }
   }, [user, segments, loading, loaded, router]);
 
