@@ -348,17 +348,11 @@ export const getAllPatients = async (
     
     const data = await heardatApiCall('Patients', params);
     
-    console.log('[API] Patients fetched successfully - raw data:', data);
+    console.log('[API] Patients fetched successfully - raw data:', JSON.parse(data).patients);
     
     // The API returns the data directly as an object with a patients array
     // Parse the response if it's a string, otherwise use it directly
-    let parsedData = data;
-    if (typeof data === 'string') {
-      parsedData = JSON.parse(data);
-    }
-    
-    console.log('[API] Parsed patients data:', parsedData);
-    
+    let parsedData = JSON.parse(data).patients;
     // Return the full response object which should have a patients array
     return parsedData;
   } catch (error) {

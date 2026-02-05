@@ -97,8 +97,8 @@ export default function CreateAppointmentScreen() {
         getAppointmentProcedures(),
         heardatApiCall('Users', {
           CompanyID: credentials.companyId || "0",
-          Active: "1",
-          Deleted: "0"
+          UserID: credentials.userId || "0",
+          Key: credentials.userKey || "0"
         }),
       ]);
 
@@ -112,7 +112,7 @@ export default function CreateAppointmentScreen() {
       // Map Heardat API responses to our Client, Branch, Procedure types
       const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
         id: patient.PatientsID || patient.id,
-        name: `${patient.Name || ''} ${patient.Surname || ''}`.trim() || 'Unknown',
+        name: `${patient.FirstName || ''} ${patient.LastName || ''}`.trim() || 'Unknown',
         email: patient.Email || patient.email,
         phone: patient.Cell || patient.phone,
       }));

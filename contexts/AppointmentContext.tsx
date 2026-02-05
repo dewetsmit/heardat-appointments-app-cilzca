@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Audiologist } from '@/types';
-import { heardatApiCall } from '@/utils/api';
+import { getHeardatCredentials, heardatApiCall } from '@/utils/api';
 
 interface AppointmentContextType {
   selectedAudiologists: Audiologist[];
@@ -21,13 +21,15 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   // Load audiologists on mount
   useEffect(() => {
     const loadAudiologists = async () => {
+      const credentials = await getHeardatCredentials();
       console.log('[AppointmentContext] Loading audiologists on mount');
       try {
         setIsLoadingAudiologists(true);
 
         const params = {
-          Deleted: '0',
-          Active: '1',
+          UserID: credentials.userId || "0",
+          CompanyID: credentials.companyId || "0",
+          Key: credentials.userKey || "0"
         };
 
         const data = await heardatApiCall('Users', params);
