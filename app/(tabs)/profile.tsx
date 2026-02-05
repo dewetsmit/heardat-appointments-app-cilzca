@@ -39,6 +39,10 @@ export default function ProfileScreen() {
     }
   }
 
+  // Extract username from Login property and email from Email property
+  const usernameDisplay = user?.Login || user?.Username || user?.username || 'N/A';
+  const emailDisplay = user?.Email || user?.email || 'N/A';
+  const fullNameDisplay = user?.full_name || user?.name || 'User';
   const roleText = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User';
 
   return (
@@ -76,17 +80,23 @@ export default function ProfileScreen() {
               color="#FFFFFF"
             />
           </View>
-          <Text style={[styles.name, { color: theme.colors.text }]}>{user?.full_name || 'User'}</Text>
+          <Text style={[styles.name, { color: theme.colors.text }]}>
+            {fullNameDisplay}
+          </Text>
           <Text style={[styles.email, { color: theme.dark ? '#98989D' : '#666' }]}>
-            {user?.email || 'email@example.com'}
+            {emailDisplay}
           </Text>
           <View style={[styles.roleBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
-            <Text style={[styles.roleText, { color: theme.colors.primary }]}>{roleText}</Text>
+            <Text style={[styles.roleText, { color: theme.colors.primary }]}>
+              {roleText}
+            </Text>
           </View>
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Account Information</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Account Information
+          </Text>
           <View style={styles.infoList}>
             <View style={styles.infoRow}>
               <View style={styles.infoLeft}>
@@ -101,7 +111,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                {user?.username || 'N/A'}
+                {usernameDisplay}
               </Text>
             </View>
 
@@ -120,7 +130,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                {user?.email || 'N/A'}
+                {emailDisplay}
               </Text>
             </View>
 
@@ -138,7 +148,9 @@ export default function ProfileScreen() {
                   Role
                 </Text>
               </View>
-              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{roleText}</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>
+                {roleText}
+              </Text>
             </View>
           </View>
         </View>
@@ -153,7 +165,9 @@ export default function ProfileScreen() {
             size={20}
             color="#FFFFFF"
           />
-          <Text style={styles.logoutButtonText}>Logout</Text>
+          <Text style={styles.logoutButtonText}>
+            Logout
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -167,7 +181,9 @@ export default function ProfileScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Logout</Text>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              Logout
+            </Text>
             <Text style={[styles.modalMessage, { color: theme.dark ? '#98989D' : '#666' }]}>
               Are you sure you want to logout?
             </Text>
@@ -176,13 +192,17 @@ export default function ProfileScreen() {
                 style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
                 onPress={() => setLogoutModalVisible(false)}
               >
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>Cancel</Text>
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: '#FF6B6B' }]}
                 onPress={confirmLogout}
               >
-                <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>Logout</Text>
+                <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
+                  Logout
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

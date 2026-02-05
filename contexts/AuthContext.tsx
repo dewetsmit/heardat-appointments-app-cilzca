@@ -19,6 +19,10 @@ interface User {
   BranchID?: string;
   UserID?: string;
   Username?: string;
+  Login?: string;
+  Email?: string;
+  role?: string;
+  username?: string;
 }
 
 interface AuthContextType {
@@ -300,12 +304,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('User data:', userData);
       
       // Enhance user data with session information
+      // Map Login property to username and Email property to email
       const currentUser: User = {
         ...userData,
         id: accessData.User,
         email: userData.Email || userData.email || '',
+        Email: userData.Email || userData.email || '',
         name: userData.Name || userData.name || userData.full_name || '',
         full_name: userData.Name || userData.name || userData.full_name || '',
+        username: userData.Login || userData.Username || '',
+        Login: userData.Login || userData.Username || '',
         SessionKey: accessData.SessionKey,
         CompanyKey: accessData.CompanyKey,
         CompanyID: accessData.Company,
@@ -315,6 +323,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       
       console.log('User details fetched successfully:', currentUser.full_name || currentUser.name);
+      console.log('Username (Login):', currentUser.username);
+      console.log('Email:', currentUser.email);
       
       // Store user data
       await storage.setItem("CurrentUser", JSON.stringify(currentUser));

@@ -348,8 +348,19 @@ export const getAllPatients = async (
     
     const data = await heardatApiCall('Patients', params);
     
-    console.log('[API] Patients fetched successfully', JSON.parse(data));
-    return JSON.parse(data).patients;
+    console.log('[API] Patients fetched successfully - raw data:', data);
+    
+    // The API returns the data directly as an object with a patients array
+    // Parse the response if it's a string, otherwise use it directly
+    let parsedData = data;
+    if (typeof data === 'string') {
+      parsedData = JSON.parse(data);
+    }
+    
+    console.log('[API] Parsed patients data:', parsedData);
+    
+    // Return the full response object which should have a patients array
+    return parsedData;
   } catch (error) {
     console.error('[API] Failed to get patients:', error);
     throw error;
@@ -401,8 +412,14 @@ export const getBranches = async (): Promise<any> => {
     
     const data = await heardatApiCall('Branch', params);
     
-    console.log('[API] Branches fetched successfully', JSON.parse(data));
-    return JSON.parse(data).branch;
+    // Parse the response if it's a string
+    let parsedData = data;
+    if (typeof data === 'string') {
+      parsedData = JSON.parse(data);
+    }
+    
+    console.log('[API] Branches fetched successfully');
+    return parsedData.branch || [];
   } catch (error) {
     console.error('[API] Failed to get branches:', error);
     throw error;
@@ -428,8 +445,14 @@ export const getAppointmentProcedures = async (): Promise<any> => {
     
     const data = await heardatApiCall('Procedures', params);
     
-    console.log('[API] Procedures fetched successfully', JSON.parse(data));
-    return JSON.parse(data).procedures;
+    // Parse the response if it's a string
+    let parsedData = data;
+    if (typeof data === 'string') {
+      parsedData = JSON.parse(data);
+    }
+    
+    console.log('[API] Procedures fetched successfully');
+    return parsedData.procedures || [];
   } catch (error) {
     console.error('[API] Failed to get procedures:', error);
     throw error;

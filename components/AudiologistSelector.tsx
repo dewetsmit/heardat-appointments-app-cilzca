@@ -27,11 +27,11 @@ export function AudiologistSelector() {
 
   const loadAudiologists = useCallback(async () => {
     if (!user) {
-      console.log('User not available, skipping audiologist load');
+      console.log('[AudiologistSelector] User not available, skipping audiologist load');
       return;
     }
 
-    console.log('Loading audiologists');
+    console.log('[AudiologistSelector] Loading audiologists');
     try {
       setIsLoading(true);
 
@@ -41,10 +41,19 @@ export function AudiologistSelector() {
       };
 
       const data = await heardatApiCall('Users', params);
-      console.log('Audiologists API response:', data);
+      console.log('[AudiologistSelector] Audiologists API raw response:', data);
 
-      if (data && data.users && Array.isArray(data.users)) {
-        const mappedAudiologists: Audiologist[] = data.users.map((user: any) => ({
+      // Parse the response if it's a string
+      let parsedData = data;
+      if (typeof data === 'string') {
+        parsedData = JSON.parse(data);
+      }
+
+      console.log('[AudiologistSelector] Parsed audiologists data:', parsedData);
+
+      // Check if we have a users array in the response
+      if (parsedData && parsedData.users && Array.isArray(parsedData.users)) {
+        const mappedAudiologists: Audiologist[] = parsedData.users.map((user: any) => ({
           id: user.UserID?.toString() || user.id,
           user_id: user.UserID?.toString() || user.id,
           full_name: user.Name || user.FullName || 'Unknown',
@@ -52,20 +61,38 @@ export function AudiologistSelector() {
           is_active: user.Active === '1' || user.is_active === true,
         }));
         
-        console.log('Audiologists loaded:', mappedAudiologists.length);
+        console.log('[AudiologistSelector] Audiologists loaded:', mappedAudiologists.length);
         setAudiologists(mappedAudiologists);
         
         // Initialize selectedAudiologists if empty
         if (!selectedAudiologists || selectedAudiologists.length === 0) {
-          console.log('Initializing selectedAudiologists with all audiologists');
+          console.log('[AudiologistSelector] Initializing selectedAudiologists with all audiologists');
+          setSelectedAudiologists(mappedAudiologists);
+        }
+      } else if (Array.isArray(parsedData)) {
+        // Fallback: if data is directly an array
+        console.log('[AudiologistSelector] Data is array, mapping directly');
+        const mappedAudiologists: Audiologist[] = parsedData.map((user: any) => ({
+          id: user.UserID?.toString() || user.id,
+          user_id: user.UserID?.toString() || user.id,
+          full_name: user.Name || user.FullName || 'Unknown',
+          specialization: user.Specialization || '',
+          is_active: user.Active === '1' || user.is_active === true,
+        }));
+        
+        console.log('[AudiologistSelector] Audiologists loaded:', mappedAudiologists.length);
+        setAudiologists(mappedAudiologists);
+        
+        if (!selectedAudiologists || selectedAudiologists.length === 0) {
+          console.log('[AudiologistSelector] Initializing selectedAudiologists with all audiologists');
           setSelectedAudiologists(mappedAudiologists);
         }
       } else {
-        console.log('No audiologists data in response');
+        console.log('[AudiologistSelector] No audiologists data in response');
         setAudiologists([]);
       }
     } catch (error) {
-      console.error('Failed to load audiologists:', error);
+      console.error('[AudiologistSelector] Failed to load audiologists:', error);
       setAudiologists([]);
     } finally {
       setIsLoading(false);
@@ -87,7 +114,7 @@ export function AudiologistSelector() {
       <TouchableOpacity
         style={[styles.selectorButton, { backgroundColor: `${theme.colors.primary}20` }]}
         onPress={() => {
-          console.log('Audiologist selector button pressed');
+          console.log('[AudiologistSelector] Selector button pressed');
           setModalVisible(true);
         }}
       >
@@ -117,7 +144,7 @@ export function AudiologistSelector() {
               <TouchableOpacity
                 style={[styles.closeButton, { backgroundColor: `${theme.colors.primary}20` }]}
                 onPress={() => {
-                  console.log('Closing audiologist selector modal');
+                  console.log('[AudiologistSelector] Closing modal');
                   setModalVisible(false);
                 }}
               >
@@ -162,7 +189,7 @@ export function AudiologistSelector() {
                         isSelected && { backgroundColor: `${theme.colors.primary}10` },
                       ]}
                       onPress={() => {
-                        console.log('Toggling audiologist:', audiologist.full_name);
+                        console.log('[AudiologistSelector] Toggling audiologist:', audiologist.full_name);
                         toggleAudiologistSelection(audiologist);
                       }}
                     >

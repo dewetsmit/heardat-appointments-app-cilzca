@@ -26,6 +26,8 @@ interface Patient {
   Email?: string;
   FileNo?: string;
   DateModified?: string;
+  FirstName?: string;
+  LastName?: string;
 }
 
 export default function SearchClientScreen() {
@@ -55,14 +57,23 @@ export default function SearchClientScreen() {
       const data = await getAllPatients(user.BranchID, '');
       console.log('[SearchClient] Patients API response:', data);
 
+      // The API returns an object with a patients array
       if (data && data.patients && Array.isArray(data.patients)) {
         console.log('[SearchClient] Patients loaded:', data.patients.length);
         setPatients(data.patients);
         setFilteredPatients(data.patients);
       } else {
-        console.log('[SearchClient] No patients data in response');
-        setPatients([]);
-        setFilteredPatients([]);
+        console.log('[SearchClient] No patients array in response, checking if data is array');
+        // Fallback: check if data itself is an array
+        if (Array.isArray(data)) {
+          console.log('[SearchClient] Data is array, using directly:', data.length);
+          setPatients(data);
+          setFilteredPatients(data);
+        } else {
+          console.log('[SearchClient] No valid patients data in response');
+          setPatients([]);
+          setFilteredPatients([]);
+        }
       }
     } catch (err: any) {
       console.error('[SearchClient] Failed to load patients:', err);
@@ -85,13 +96,14 @@ export default function SearchClientScreen() {
 
     const query = searchQuery.toLowerCase();
     const filtered = patients.filter((patient) => {
-      const name = (patient.Name || '').toLowerCase();
-      const surname = (patient.Surname || '').toLowerCase();
-      const fullName = `${name} ${surname}`;
+      // Handle both Name/Surname and FirstName/LastName field names
+      const firstName = (patient.FirstName || patient.Name || '').toLowerCase();
+      const lastName = (patient.LastName || patient.Surname || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`;
       
       return (
-        name.includes(query) ||
-        surname.includes(query) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
         fullName.includes(query)
       );
     });
@@ -101,7 +113,7 @@ export default function SearchClientScreen() {
   }, [searchQuery, patients]);
 
   function handlePatientPress(patient: Patient) {
-    console.log('[SearchClient] Patient selected:', patient.PatientsID, patient.Name, patient.Surname);
+    console.log('[SearchClient] Patient selected:', patient.PatientsID, patient.FirstName || patient.Name, patient.LastName || patient.Surname);
     router.push({
       pathname: '/patient-detail',
       params: { patientId: patient.PatientsID },
@@ -109,7 +121,9 @@ export default function SearchClientScreen() {
   }
 
   const fullNameDisplay = (patient: Patient) => {
-    const fullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
+    const firstName = patient.FirstName || patient.Name || '';
+    const lastName = patient.LastName || patient.Surname || '';
+    const fullName = `${firstName} ${lastName}`.trim();
     return fullName || 'Unknown Patient';
   };
 
