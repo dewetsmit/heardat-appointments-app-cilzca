@@ -419,6 +419,38 @@ export const getBranches = async (): Promise<any> => {
     throw error;
   }
 };
+/**
+ * Get all users from Heardat API
+ * 
+ * @returns Promise with users data
+ */
+export const getUsers = async (): Promise<any> => {
+  try {
+    console.log('[API] Getting users');
+      const credentials = await getHeardatCredentials();
+      const params = {
+          CompanyID: credentials.companyId || "0",
+          UserID: credentials.userId || "0",
+          Key: credentials.userKey || "0"
+      };
+    
+    console.log('[API] Users request params:', params);
+    
+    const data = await heardatApiCall('Users', params);
+    
+    // Parse the response if it's a string
+    let parsedData = data;
+    if (typeof data === 'string') {
+      parsedData = JSON.parse(data);
+    }
+    
+    console.log('[API] Users fetched successfully', parsedData.users.length);
+    return parsedData.users || [];
+  } catch (error) {
+    console.error('[API] Failed to get users:', error);
+    throw error;
+  }
+};
 
 /**
  * Get all appointment procedures from Heardat API

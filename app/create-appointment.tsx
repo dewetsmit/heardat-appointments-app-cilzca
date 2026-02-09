@@ -25,7 +25,8 @@ import {
   getHeardatCredentials,
   createNewAppointment,
   formatDateForAPI,
-  formatTimeForAPI
+  formatTimeForAPI,
+  getUsers
 } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Client, Branch, Procedure, Audiologist } from '@/types';
@@ -96,18 +97,14 @@ export default function CreateAppointmentScreen() {
         getAllPatients(branchId, ''),
         getBranches(),
         getAppointmentProcedures(),
-        heardatApiCall('Users', {
-          CompanyID: credentials.companyId || "0",
-          UserID: credentials.userId || "0",
-          Key: credentials.userKey || "0"
-        }),
+        getUsers()
       ]);
 
       console.log('[CreateAppointment] Form data loaded from Heardat API:', {
         clients: clientsRes?.length || 0,
         branches: branchesRes?.length || 0,
         procedures: proceduresRes?.length || 0,
-        audiologists: audiologistsRes?.users?.length || 0,
+        audiologists: audiologistsRes?.length || 0,
       });
 
       // Map Heardat API responses to our Client, Branch, Procedure types
@@ -132,7 +129,7 @@ export default function CreateAppointmentScreen() {
       }));
 
       // Map audiologists from Users endpoint
-      const mappedAudiologists: Audiologist[] = (audiologistsRes?.users || []).map((user: any) => ({
+      const mappedAudiologists: Audiologist[] = (audiologistsRes || []).map((user: any) => ({
         id: user.UserID?.toString() || user.id,
         user_id: user.UserID?.toString() || user.id,
         full_name: user.Name || user.FirstName + ' ' + user.LastName || 'Unknown',
@@ -140,7 +137,7 @@ export default function CreateAppointmentScreen() {
         is_active: user.Active === "1" || user.is_active === true,
       }));
 
-      console.log('[CreateAppointment] Mapped audiologists:', mappedAudiologists.length);
+      console.log('[CreateAppointment] Mapped audiologists:', mappedAudiologists);
 
       setClients(mappedClients);
       setBranches(mappedBranches);
