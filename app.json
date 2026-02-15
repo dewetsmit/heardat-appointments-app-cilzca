@@ -5,11 +5,11 @@
     "slug": "Heardat-Appointments",
     "version": "2.2.3",
     "orientation": "portrait",
-    "icon": "./assets/images/natively-dark.png",
+    "icon": "./assets/images/Heardat_icon-dark.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/natively-dark.png",
+      "image": "./assets/images/Heardat_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
