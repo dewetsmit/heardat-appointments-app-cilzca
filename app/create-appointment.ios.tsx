@@ -60,6 +60,10 @@ export default function CreateAppointmentScreen() {
   const [repeatAppointment, setRepeatAppointment] = useState(false);
   const [notes, setNotes] = useState('');
 
+  // Client search state
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+
   // Data from API
   const [clients, setClients] = useState<Client[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -91,28 +95,19 @@ export default function CreateAppointmentScreen() {
       
       console.log('[CreateAppointment] Loading data with branchId:', branchId);
 
-      // Load clients, branches, procedures, and audiologists from Heardat API
-      const [clientsRes, branchesRes, proceduresRes, audiologistsRes] = await Promise.all([
-        getAllPatients(branchId, ''),
+      // Load branches, procedures, and audiologists from Heardat API
+      // Don't load clients here - they'll be loaded on-demand with search
+      const [branchesRes, proceduresRes, audiologistsRes] = await Promise.all([
         getBranches(),
         getAppointmentProcedures(),
         getUsers()
       ]);
 
       console.log('[CreateAppointment] Form data loaded from Heardat API:', {
-        clients: clientsRes?.length || 0,
         branches: branchesRes?.length || 0,
         procedures: proceduresRes?.length || 0,
         audiologists: audiologistsRes?.length || 0,
       });
-
-      // Map Heardat API responses to our Client, Branch, Procedure types
-      const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
-        id: patient.PatientsID || patient.id,
-        name: `${patient.FirstName || ''} ${patient.LastName || ''}`.trim() || 'Unknown',
-        email: patient.Email || patient.email,
-        phone: patient.Cell || patient.phone,
-      }));
 
       const mappedBranches: Branch[] = (branchesRes || []).map((branch: any) => ({
         id: branch.BranchID || branch.id,
@@ -138,7 +133,6 @@ export default function CreateAppointmentScreen() {
 
       console.log('[CreateAppointment] Mapped audiologists:', mappedAudiologists);
 
-      setClients(mappedClients);
       setBranches(mappedBranches);
       setProcedures(mappedProcedures);
       setExaminers(mappedAudiologists);
@@ -154,6 +148,53 @@ export default function CreateAppointmentScreen() {
       setLoading(false);
     }
   }, [token]);
+
+  // Load clients with search query
+  const loadClients = useCallback(async (searchQuery: string) => {
+    console.log('[CreateAppointment] Loading clients with search:', searchQuery);
+    setIsLoadingClients(true);
+    
+    try {
+      const credentials = await getHeardatCredentials();
+      const branchId = credentials.branchId || "0";
+      
+      const clientsRes = await getAllPatients(branchId, searchQuery);
+      
+      const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
+        id: patient.PatientsID || patient.id,
+        name: `${patient.FirstName || ''} ${patient.LastName || ''}`.trim() || 'Unknown',
+        email: patient.Email || patient.email,
+        phone: patient.Cell || patient.phone,
+      }));
+      
+      console.log('[CreateAppointment] Clients loaded:', mappedClients.length);
+      setClients(mappedClients);
+    } catch (error) {
+      console.error('[CreateAppointment] Error loading clients:', error);
+      setClients([]);
+    } finally {
+      setIsLoadingClients(false);
+    }
+  }, []);
+
+  // Load clients when search query changes (with debounce effect)
+  useEffect(() => {
+    // Only load clients when the client dropdown is open
+    if (activeDropdown === 'client') {
+      const timeoutId = setTimeout(() => {
+        loadClients(clientSearchQuery);
+      }, 300); // 300ms debounce
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [clientSearchQuery, activeDropdown, loadClients]);
+
+  // Load initial clients when dropdown opens
+  useEffect(() => {
+    if (activeDropdown === 'client' && clients.length === 0) {
+      loadClients('');
+    }
+  }, [activeDropdown, clients.length, loadClients]);
 
   useEffect(() => {
     loadFormData();
@@ -284,6 +325,7 @@ export default function CreateAppointmentScreen() {
   ) => {
     const isOpen = activeDropdown === dropdownKey;
     const displayValue = value ? value.label : 'Select...';
+    const isClientDropdown = dropdownKey === 'client';
 
     return (
       <View style={styles.fieldContainer}>
@@ -293,6 +335,9 @@ export default function CreateAppointmentScreen() {
           onPress={() => {
             console.log(`[CreateAppointment] Dropdown ${dropdownKey} pressed`);
             setActiveDropdown(isOpen ? null : dropdownKey);
+            if (dropdownKey === 'client' && !isOpen) {
+              setClientSearchQuery('');
+            }
           }}
         >
           <Text style={[styles.dropdownText, { color: value ? colors.text : colors.text + '80' }]}>
@@ -310,19 +355,65 @@ export default function CreateAppointmentScreen() {
           visible={isOpen}
           transparent
           animationType="fade"
-          onRequestClose={() => setActiveDropdown(null)}
+          onRequestClose={() => {
+            setActiveDropdown(null);
+            if (isClientDropdown) {
+              setClientSearchQuery('');
+            }
+          }}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setActiveDropdown(null)}
+            onPress={() => {
+              setActiveDropdown(null);
+              if (isClientDropdown) {
+                setClientSearchQuery('');
+              }
+            }}
           >
             <View style={[styles.dropdownModal, { backgroundColor: colors.card }]}>
+              {isClientDropdown && (
+                <View style={[styles.searchContainer, { borderBottomColor: colors.border }]}>
+                  <IconSymbol
+                    ios_icon_name="magnifyingglass"
+                    android_material_icon_name="search"
+                    size={20}
+                    color={colors.text + '80'}
+                  />
+                  <TextInput
+                    style={[styles.searchInput, { color: colors.text }]}
+                    placeholder="Search clients..."
+                    placeholderTextColor={colors.text + '80'}
+                    value={clientSearchQuery}
+                    onChangeText={setClientSearchQuery}
+                    autoFocus
+                  />
+                  {clientSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setClientSearchQuery('')}>
+                      <IconSymbol
+                        ios_icon_name="xmark.circle.fill"
+                        android_material_icon_name="cancel"
+                        size={20}
+                        color={colors.text + '80'}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              
               <ScrollView style={styles.dropdownList}>
-                {options.length === 0 ? (
+                {isLoadingClients && isClientDropdown ? (
+                  <View style={styles.loadingDropdown}>
+                    <ActivityIndicator size="small" color="#4A90E2" />
+                    <Text style={[styles.loadingDropdownText, { color: colors.text + '80' }]}>
+                      Loading clients...
+                    </Text>
+                  </View>
+                ) : options.length === 0 ? (
                   <View style={styles.emptyDropdown}>
                     <Text style={[styles.emptyDropdownText, { color: colors.text + '80' }]}>
-                      No options available
+                      {isClientDropdown && clientSearchQuery ? 'No clients found' : 'No options available'}
                     </Text>
                   </View>
                 ) : (
@@ -334,6 +425,9 @@ export default function CreateAppointmentScreen() {
                           console.log(`[CreateAppointment] Selected ${dropdownKey}:`, option.label);
                           onSelect(option);
                           setActiveDropdown(null);
+                          if (isClientDropdown) {
+                            setClientSearchQuery('');
+                          }
                         }}
                       >
                         <Text style={[styles.dropdownItemText, { color: colors.text }]}>
@@ -468,7 +562,7 @@ export default function CreateAppointmentScreen() {
           />
         )}
 
-        {/* Client Dropdown */}
+        {/* Client Dropdown with Search */}
         {renderDropdown(
           'Client',
           selectedClient,
@@ -741,6 +835,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 4,
+  },
   dropdownList: {
     maxHeight: 400,
   },
@@ -764,6 +871,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyDropdownText: {
+    fontSize: 16,
+  },
+  loadingDropdown: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingDropdownText: {
     fontSize: 16,
   },
   toggleRow: {
