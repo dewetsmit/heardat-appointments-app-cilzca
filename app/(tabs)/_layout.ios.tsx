@@ -29,6 +29,7 @@ export default function TabLayout() {
           headerShown: false,
           animation: 'none',
         }}
+        initialRouteName="calendar"
       >
         <Stack.Screen key="calendar" name="calendar" />
         <Stack.Screen key="profile" name="profile" />

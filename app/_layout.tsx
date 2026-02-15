@@ -22,7 +22,7 @@ import { AppointmentProvider } from "@/contexts/AppointmentContext";
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)/calendar",
+  initialRouteName: "(tabs)",
 };
 
 function RootLayoutNav() {
