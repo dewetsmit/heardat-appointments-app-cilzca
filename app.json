@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "heardat.mobile.app",
+      "bundleIdentifier": "heardat.app.ionic",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +25,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "heardat.mobile.app"
+      "package": "heardat.app.ionic"
     },
     "web": {
       "favicon": "./assets/images/Heardat_icon.png",
