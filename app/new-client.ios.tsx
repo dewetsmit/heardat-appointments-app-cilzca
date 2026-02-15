@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Platform,
   Modal,
   Alert,
 } from 'react-native';
@@ -121,17 +120,25 @@ export default function NewClientScreen() {
   }, []);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
+    if (event.type === 'dismissed') {
+      setShowDatePicker(false);
+      return;
+    }
     if (selectedDate) {
       setDateOfBirth(selectedDate);
     }
+    setShowDatePicker(false);
   };
 
   const handleMmDateChange = (event: any, selectedDate?: Date) => {
-    setShowMmDatePicker(Platform.OS === 'ios');
+    if (event.type === 'dismissed') {
+      setShowMmDatePicker(false);
+      return;
+    }
     if (selectedDate) {
       setMmDateOfBirth(selectedDate);
     }
+    setShowMmDatePicker(false);
   };
 
   const formatDate = (date: Date): string => {
@@ -381,13 +388,36 @@ export default function NewClientScreen() {
         </TouchableOpacity>
 
         {showPicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={onChange}
-            maximumDate={new Date()}
-          />
+          <Modal visible={showPicker} transparent animationType="slide">
+            <View style={styles.datePickerModal}>
+              <View style={[styles.datePickerContainer, { backgroundColor: theme.colors.card }]}>
+                <View style={styles.datePickerHeader}>
+                  <TouchableOpacity onPress={() => onChange({ type: 'dismissed' }, undefined)}>
+                    <Text style={[styles.datePickerButton, { color: theme.colors.primary }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => onChange({ type: 'set' }, date)}>
+                    <Text style={[styles.datePickerButton, { color: theme.colors.primary }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="spinner"
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) {
+                      if (showPicker === showDatePicker) {
+                        setDateOfBirth(selectedDate);
+                      } else {
+                        setMmDateOfBirth(selectedDate);
+                      }
+                    }
+                  }}
+                  maximumDate={new Date()}
+                  textColor={theme.colors.text}
+                />
+              </View>
+            </View>
+          </Modal>
         )}
       </View>
     );
@@ -529,6 +559,28 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 16,
+  },
+  datePickerModal: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  datePickerContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  datePickerButton: {
+    fontSize: 17,
+    fontWeight: '600',
   },
   submitButton: {
     height: 56,

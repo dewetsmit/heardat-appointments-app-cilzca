@@ -1,14 +1,15 @@
+
 {
   "expo": {
     "name": "Heardat Appointments",
     "slug": "Heardat-Appointments",
     "version": "2.2.3",
     "orientation": "portrait",
-    "icon": "./assets/images/AppIcon-512@2x.png",
+    "icon": "./assets/images/Heardat_icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/AppIcon-512@2x.png",
+      "image": "./assets/images/Heardat_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -21,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/AppIcon-512@2x.png",
+        "foregroundImage": "./assets/images/Heardat_icon.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
