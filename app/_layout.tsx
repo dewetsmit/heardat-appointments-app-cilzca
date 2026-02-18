@@ -18,6 +18,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppointmentProvider } from "@/contexts/AppointmentContext";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,6 +35,8 @@ function RootLayoutNav() {
 
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    // Load MaterialIcons font for consistent icon display on iOS
+    ...MaterialIcons.font,
   });
 
   useEffect(() => {

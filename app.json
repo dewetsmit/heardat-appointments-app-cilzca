@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "Heardat Appointments",
-    "slug": "Heardat-Appointments",
+    "slug": "Heardat Appointments",
     "version": "2.2.3",
     "orientation": "portrait",
     "icon": "./assets/images/Heardat_icon.png",
@@ -37,7 +36,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "heardatappointments",
+    "scheme": "Heardat Appointments",
     "experiments": {
       "typedRoutes": true
     },
