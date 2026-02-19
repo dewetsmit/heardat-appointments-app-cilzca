@@ -430,13 +430,14 @@ export const getUsers = async (): Promise<any> => {
       const credentials = await getHeardatCredentials();
       const params = {
           CompanyID: credentials.companyId || "0",
-          UserID: credentials.userId || "0",
-          Key: credentials.userKey || "0"
+          BranchId: "0",
+          Active: "1",
+          Deleted: "0"
       };
     
     console.log('[API] Users request params:', params);
     
-    const data = await heardatApiCall('Users', params);
+    const data = await heardatApiCall('AppointmentUsers', params);
     
     // Parse the response if it's a string
     let parsedData = data;
@@ -444,8 +445,8 @@ export const getUsers = async (): Promise<any> => {
       parsedData = JSON.parse(data);
     }
     
-    console.log('[API] Users fetched successfully', parsedData.users.length);
-    return parsedData.users || [];
+    console.log('[API] Users fetched successfully', parsedData.appointmentusers.length);
+    return parsedData.appointmentusers || [];
   } catch (error) {
     console.error('[API] Failed to get users:', error);
     throw error;

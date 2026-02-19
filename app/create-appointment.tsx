@@ -162,7 +162,7 @@ export default function CreateAppointmentScreen() {
       const clientsRes = await getAllPatients(branchId, searchQuery);
       
       const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
-        id: patient.PatientsID || patient.id,
+        id: patient.PatientID || patient.id,
         name: `${patient.FirstName || ''} ${patient.LastName || ''}`.trim() || 'Unknown',
         email: patient.Email || patient.email,
         phone: patient.Cell || patient.phone,
@@ -228,6 +228,7 @@ export default function CreateAppointmentScreen() {
   };
 
   const handleSubmit = async () => {
+    const credentials = await getHeardatCredentials();
     console.log('[CreateAppointment] Submit button pressed - creating appointment');
 
     // Validation
@@ -253,30 +254,27 @@ export default function CreateAppointmentScreen() {
 
       // Build appointment form data matching Heardat API expectations
       const appointmentFormData: Record<string, any> = {
-        PatientsID: selectedClient.id,
-        BranchID: selectedBranch.id,
-        ProceduresID: selectedProcedure.id,
-        UserIDAssigned: selectedExaminer.id,
+        AppointmentID: "0",
         DateAppointment: formatDateForAPI(date),
-        TimeAppointment: formatTimeForAPI(time),
+        Active: "1",
+        Deleted: "0",
+        BranchID: selectedBranch.id,
+        Source: "0",
+        UserIDAssigned: selectedExaminer.id,
         Duration: duration.toString(),
-        Notes: notes.trim() || "",
+        ProceduresID: selectedProcedure.id,
+        ConsoltationID: "0",
+        Type: "Booked Out",
+        UserIDAssignedAssistant: selectedAssistant? selectedAssistant.id : "0",
+        RemindMe: sendReminders ? "1" : "0",
+        DateEndAppointment: formatDateForAPI(date),
+        UserID: credentials.userId,
+        Userkey: credentials.userKey,
+        Companykey: credentials.companyId,
+        Sessionkey: credentials.sessionKey,
+        CompanyID: credentials.companyId,
+        PatientID: selectedClient.id,
       };
-
-      // Add assistant if selected
-      if (selectedAssistant) {
-        appointmentFormData.AssistantID = selectedAssistant.id;
-      }
-
-      // Add optional fields
-      if (sendReminders) {
-        appointmentFormData.SendReminders = "1";
-      }
-
-      if (repeatAppointment) {
-        appointmentFormData.IsRecurring = "1";
-        appointmentFormData.RecurrencePattern = "weekly";
-      }
 
       console.log('[CreateAppointment] Creating appointment with form data:', appointmentFormData);
 
