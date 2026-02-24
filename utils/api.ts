@@ -183,8 +183,9 @@ export const heardatApiCall = async <T = any>(
     }
     
     const responseText = await response.text();
+    console.log("[Heardat API] Raw response text (first 500 chars):", responseText.substring(0, 500));
     const data = JSON.parse(responseText);
-    console.log("[Heardat API] Success");
+    console.log("[Heardat API] Success - parsed data type:", typeof data, "is array:", Array.isArray(data));
     return data;
   } catch (error) {
     console.error("[Heardat API] Request failed:", error);
@@ -290,8 +291,31 @@ export const getAppointmentsForUser = async (
     // Call Heardat API
     const data = await heardatApiCall('Appointments', params);
     
-    console.log('[API] Appointments fetched successfully');
-    return data;
+    // Parse the response if it's a string
+    let parsedData = data;
+    if (typeof data === 'string') {
+      try {
+        parsedData = JSON.parse(data);
+      } catch (parseError) {
+        console.error('[API] Failed to parse appointments response:', parseError);
+        return { appointments: [] };
+      }
+    }
+    
+    console.log('[API] Appointments fetched successfully, raw data:', parsedData);
+    
+    // Return in a consistent format with appointments array
+    if (parsedData && parsedData.appointments && Array.isArray(parsedData.appointments)) {
+      console.log('[API] Found', parsedData.appointments.length, 'appointments in response');
+      return parsedData;
+    } else if (Array.isArray(parsedData)) {
+      // If the response is directly an array, wrap it
+      console.log('[API] Response is array, wrapping in appointments object');
+      return { appointments: parsedData };
+    } else {
+      console.log('[API] No appointments found in response structure');
+      return { appointments: [] };
+    }
   } catch (error) {
     console.error('[API] Failed to get appointments for user:', error);
     throw error;

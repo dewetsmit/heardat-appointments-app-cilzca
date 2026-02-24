@@ -48,12 +48,13 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
           const mappedAudiologists: Audiologist[] = parsedData.users.map((user: any) => ({
             id: user.UserID?.toString() || user.id,
             user_id: user.UserID?.toString() || user.id,
-            full_name: user.Name || user.FullName || 'Unknown',
+            full_name: `${user.FirstName || ''} ${user.LastName || ''}`.trim() || user.Name || user.FullName || 'Unknown',
             specialization: user.Specialization || '',
             is_active: user.Active === '1' || user.is_active === true,
           }));
           
           console.log('[AppointmentContext] Audiologists loaded:', mappedAudiologists.length);
+          console.log('[AppointmentContext] First audiologist:', mappedAudiologists[0]);
           setAllAudiologists(mappedAudiologists);
           setSelectedAudiologists(mappedAudiologists);
         } else if (Array.isArray(parsedData)) {
@@ -62,12 +63,13 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
           const mappedAudiologists: Audiologist[] = parsedData.map((user: any) => ({
             id: user.UserID?.toString() || user.id,
             user_id: user.UserID?.toString() || user.id,
-            full_name: user.Name || user.FullName || 'Unknown',
+            full_name: `${user.FirstName || ''} ${user.LastName || ''}`.trim() || user.Name || user.FullName || 'Unknown',
             specialization: user.Specialization || '',
             is_active: user.Active === '1' || user.is_active === true,
           }));
           
           console.log('[AppointmentContext] Audiologists loaded:', mappedAudiologists.length);
+          console.log('[AppointmentContext] First audiologist:', mappedAudiologists[0]);
           setAllAudiologists(mappedAudiologists);
           setSelectedAudiologists(mappedAudiologists);
         } else {
