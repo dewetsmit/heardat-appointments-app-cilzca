@@ -68,16 +68,15 @@ function RootLayoutNav() {
     console.log('Auth state changed:', { user: !!user, inAuthGroup, segments });
 
     // Redirect logic: If user is logged in, go to calendar. If not, go to auth.
-    if (user && inAuthGroup) {
+    if (user && !inAuthGroup) {
+      // User is authenticated and not in auth group - allow navigation
+      console.log('User authenticated, allowing navigation');
+    } else if (user && inAuthGroup) {
       console.log('User authenticated, redirecting to calendar');
       router.replace('/(tabs)/calendar');
     } else if (!user && !inAuthGroup) {
-      console.log('User not authenticated (session expired), redirecting to auth');
+      console.log('User not authenticated, redirecting to auth');
       router.replace('/auth');
-      // Show session expired message after a brief delay to ensure navigation completes
-      setTimeout(() => {
-        Alert.alert('Session Expired', 'Your session has expired. Please sign in again.');
-      }, 500);
     }
   }, [user, segments, loading, loaded, router]);
 
@@ -163,6 +162,7 @@ function RootLayoutNav() {
                     title: 'Room Planner',
                   }} 
                 />
+                <Stack.Screen name="+not-found" />
               </Stack>
               <SystemBars style={"auto"} />
             </GestureHandlerRootView>

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { IconSymbol } from '@/components/IconSymbol';
+import moment from 'moment';
 import { 
   getAllPatients, 
   getBranches, 
@@ -26,7 +27,8 @@ import {
   createNewAppointment,
   formatDateForAPI,
   formatTimeForAPI,
-  getUsers
+  getUsers,
+  getUserAppointments
 } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Client, Branch, Procedure, Audiologist } from '@/types';
@@ -41,6 +43,13 @@ function resolveImageSource(source: string | number | any): any {
 interface DropdownOption {
   id: string;
   label: string;
+}
+
+interface HeardatAppointment {
+  AppointmentID: string;
+  DateAppointment: string;
+  Duration: string;
+  UserIDAssigned?: string;
 }
 
 export default function CreateAppointmentScreen() {
@@ -227,9 +236,68 @@ export default function CreateAppointmentScreen() {
     }
   };
 
-  const handleSubmit = async () => {
+  const doubleBookingAlert = useCallback(() => {
+    Alert.alert(
+      'Double Booking Detected',
+      'This appointment overlaps with an existing appointment. Please choose a different time.',
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  const createAppointment = useCallback(async () => {
     const credentials = await getHeardatCredentials();
-    console.log('[CreateAppointment] Submit button pressed - creating appointment');
+    console.log('[CreateAppointment] Creating appointment');
+
+    try {
+      setSubmitting(true);
+
+      // Build appointment form data matching Heardat API expectations
+      const appointmentFormData: Record<string, any> = {
+        AppointmentID: "0",
+        DateAppointment: formatDateForAPI(date),
+        Active: "1",
+        Deleted: "0",
+        BranchID: selectedBranch!.id,
+        Source: "0",
+        UserIDAssigned: selectedExaminer!.id,
+        Duration: duration.toString(),
+        ProceduresID: selectedProcedure!.id,
+        ConsoltationID: "0",
+        Type: "Booked Out",
+        UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
+        RemindMe: sendReminders ? "1" : "0",
+        DateEndAppointment: formatDateForAPI(date),
+        UserID: credentials.userId,
+        Userkey: credentials.userKey,
+        Companykey: credentials.companyId,
+        Sessionkey: credentials.sessionKey,
+        CompanyID: credentials.companyId,
+        PatientID: selectedClient!.id,
+      };
+
+      console.log('[CreateAppointment] Creating appointment with form data:', appointmentFormData);
+
+      // Call the createNewAppointment function
+      const response = await createNewAppointment(appointmentFormData);
+
+      console.log('[CreateAppointment] Appointment created successfully:', response);
+      Alert.alert('Success', 'Appointment created successfully', [
+        {
+          text: 'OK',
+          onPress: () => router.back(),
+        },
+      ]);
+    } catch (error) {
+      console.error('[CreateAppointment] Error creating appointment:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create appointment';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [date, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router]);
+
+  const checkIfDoubleBooking = useCallback(async () => {
+    console.log('[CreateAppointment] Checking for double bookings');
 
     // Validation
     if (!selectedClient) {
@@ -250,51 +318,136 @@ export default function CreateAppointmentScreen() {
     }
 
     try {
-      setSubmitting(true);
+      const appointmentDate = new Date(date);
+      const selectedDay = appointmentDate.getDate();
 
-      // Build appointment form data matching Heardat API expectations
-      const appointmentFormData: Record<string, any> = {
-        AppointmentID: "0",
-        DateAppointment: formatDateForAPI(date),
-        Active: "1",
-        Deleted: "0",
+      const firstDayOfMonth = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), 1);
+      const lastDayOfMonth = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth() + 1, 0);
+
+      const credentials = await getHeardatCredentials();
+
+      // Fetch appointments for the selected examiner for the month
+      const searchUser = {
+        UserID: selectedExaminer.id,
+        CompanyID: credentials.companyId || "0",
         BranchID: selectedBranch.id,
-        Source: "0",
-        UserIDAssigned: selectedExaminer.id,
-        Duration: duration.toString(),
-        ProceduresID: selectedProcedure.id,
-        ConsoltationID: "0",
-        Type: "Booked Out",
-        UserIDAssignedAssistant: selectedAssistant? selectedAssistant.id : "0",
-        RemindMe: sendReminders ? "1" : "0",
-        DateEndAppointment: formatDateForAPI(date),
-        UserID: credentials.userId,
-        Userkey: credentials.userKey,
-        Companykey: credentials.companyId,
-        Sessionkey: credentials.sessionKey,
-        CompanyID: credentials.companyId,
-        PatientID: selectedClient.id,
       };
 
-      console.log('[CreateAppointment] Creating appointment with form data:', appointmentFormData);
+      console.log('[CreateAppointment] Fetching appointments for double booking check:', searchUser);
 
-      // Call the createNewAppointment function (matches Angular implementation)
-      const response = await createNewAppointment(appointmentFormData);
+      let selectedDayAppointments: HeardatAppointment[] = [];
 
-      console.log('[CreateAppointment] Appointment created successfully:', response);
-      Alert.alert('Success', 'Appointment created successfully', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      try {
+        const response = await getUserAppointments(
+          formatDateForAPI(firstDayOfMonth),
+          formatDateForAPI(lastDayOfMonth),
+          searchUser
+        );
+
+        console.log('[CreateAppointment] Appointments response:', response);
+
+        if (response) {
+          // Parse response - it might be a string or already parsed
+          let calendarData: HeardatAppointment[] = [];
+          
+          if (typeof response === 'string') {
+            const parsed = JSON.parse(response);
+            calendarData = parsed.appointments || parsed;
+          } else if (response.appointments) {
+            calendarData = response.appointments;
+          } else if (Array.isArray(response)) {
+            calendarData = response;
+          }
+
+          // Filter appointments for the selected day
+          selectedDayAppointments = calendarData.filter((appointment: HeardatAppointment) => {
+            const appointmentDay = new Date(appointment.DateAppointment).getDate();
+            return appointmentDay === selectedDay;
+          });
+
+          console.log('[CreateAppointment] Appointments on selected day:', selectedDayAppointments.length);
+        }
+      } catch (error) {
+        console.error('[CreateAppointment] Error fetching appointments for double booking check:', error);
+        Alert.alert('Error', 'Could not check for double bookings. Please try again.');
+        return;
+      }
+
+      // If no appointments on this day, proceed with creation
+      if (selectedDayAppointments.length === 0) {
+        console.log('[CreateAppointment] No appointments on selected day, proceeding with creation');
+        createAppointment();
+        return;
+      }
+
+      // Map existing appointments to time ranges
+      const existingAppointmentTimes = selectedDayAppointments.map((appointment: HeardatAppointment) => {
+        const appointmentTimeStart = moment(appointment.DateAppointment);
+        
+        // Parse duration (format: "HH:MM")
+        const durationParts = appointment.Duration.split(':');
+        const hours = parseInt(durationParts[0], 10) || 0;
+        const minutes = parseInt(durationParts[1], 10) || 0;
+        
+        const appointmentTimeEnd = appointmentTimeStart.clone().add(hours, 'hours').add(minutes, 'minutes');
+
+        return {
+          appointmentTimeStart,
+          appointmentTimeEnd,
+        };
+      });
+
+      // Calculate selected appointment time range
+      // Combine date and time into a single moment object
+      const selectedDateTime = moment(date);
+      selectedDateTime.hours(time.getHours());
+      selectedDateTime.minutes(time.getMinutes());
+      selectedDateTime.seconds(0);
+      selectedDateTime.milliseconds(0);
+
+      const selectedAppointmentTimeStart = selectedDateTime;
+      const selectedAppointmentTimeEnd = selectedDateTime.clone().add(duration, 'minutes');
+
+      console.log('[CreateAppointment] Selected appointment time:', {
+        start: selectedAppointmentTimeStart.format(),
+        end: selectedAppointmentTimeEnd.format(),
+      });
+
+      // Check for overlaps
+      let isDoubleBooking = false;
+
+      for (const existingApp of existingAppointmentTimes) {
+        console.log('[CreateAppointment] Checking overlap with existing appointment:', {
+          start: existingApp.appointmentTimeStart.format(),
+          end: existingApp.appointmentTimeEnd.format(),
+        });
+
+        // Overlap condition: (StartA < EndB) && (EndA > StartB)
+        if (
+          selectedAppointmentTimeStart.isBefore(existingApp.appointmentTimeEnd) &&
+          selectedAppointmentTimeEnd.isAfter(existingApp.appointmentTimeStart)
+        ) {
+          console.log('[CreateAppointment] Double booking detected!');
+          isDoubleBooking = true;
+          break;
+        }
+      }
+
+      if (isDoubleBooking) {
+        doubleBookingAlert();
+      } else {
+        console.log('[CreateAppointment] No double booking, proceeding with creation');
+        createAppointment();
+      }
     } catch (error) {
-      console.error('[CreateAppointment] Error creating appointment:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create appointment';
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setSubmitting(false);
+      console.error('[CreateAppointment] Error in double booking check:', error);
+      Alert.alert('Error', 'Failed to check for double bookings. Please try again.');
     }
+  }, [date, time, duration, selectedClient, selectedBranch, selectedProcedure, selectedExaminer, createAppointment, doubleBookingAlert]);
+
+  const handleSubmit = async () => {
+    console.log('[CreateAppointment] Submit button pressed - checking for double bookings');
+    checkIfDoubleBooking();
   };
 
   const formatDate = (date: Date): string => {
