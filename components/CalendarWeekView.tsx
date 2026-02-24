@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
+import { Audiologist } from '@/types';
 
 interface Appointment {
   AppointmentID: string;
@@ -18,20 +19,35 @@ interface Appointment {
   TimeAppointment: string;
   Duration?: number;
   Status?: string;
+  audiologistId?: string;
+  audiologistName?: string;
 }
 
 interface CalendarWeekViewProps {
   selectedDate: string;
   appointments: Appointment[];
+  selectedAudiologists: Audiologist[];
   onAppointmentPress?: (appointment: Appointment) => void;
   onDayPress?: (date: string) => void;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_COLUMN_WIDTH = 60;
-const SLOT_HEIGHT = 60; // 1 hour = 60px
+const SLOT_HEIGHT = 60;
 
-export function CalendarWeekView({ selectedDate, appointments, onAppointmentPress, onDayPress }: CalendarWeekViewProps) {
+// Color palette for audiologists
+const AUDIOLOGIST_COLORS = [
+  '#007AFF', // Blue
+  '#34C759', // Green
+  '#FF9500', // Orange
+  '#FF3B30', // Red
+  '#AF52DE', // Purple
+  '#5AC8FA', // Light Blue
+  '#FF2D55', // Pink
+  '#FFCC00', // Yellow
+];
+
+export function CalendarWeekView({ selectedDate, appointments, selectedAudiologists, onAppointmentPress, onDayPress }: CalendarWeekViewProps) {
   const theme = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -99,14 +115,18 @@ export function CalendarWeekView({ selectedDate, appointments, onAppointmentPres
     return { top, height };
   };
 
-  // Group appointments by date
-  const appointmentsByDate: { [key: string]: Appointment[] } = {};
-  appointments.forEach((appointment) => {
-    const dateKey = appointment.DateAppointment;
-    if (!appointmentsByDate[dateKey]) {
-      appointmentsByDate[dateKey] = [];
-    }
-    appointmentsByDate[dateKey].push(appointment);
+  // Group appointments by date and audiologist
+  const appointmentsByDateAndAudiologist: { [dateKey: string]: { [audiologistId: string]: Appointment[] } } = {};
+  
+  weekDates.forEach((date) => {
+    const dateKey = formatDateKey(date);
+    appointmentsByDateAndAudiologist[dateKey] = {};
+    
+    selectedAudiologists.forEach((audiologist) => {
+      appointmentsByDateAndAudiologist[dateKey][audiologist.user_id] = appointments.filter(
+        (apt) => apt.DateAppointment === dateKey && apt.audiologistId === audiologist.user_id
+      );
+    });
   });
 
   const timeSlots = generateTimeSlots();
@@ -121,6 +141,12 @@ export function CalendarWeekView({ selectedDate, appointments, onAppointmentPres
 
   const weekDisplay = `${weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
+  // Get color for audiologist
+  const getAudiologistColor = (audiologistId: string): string => {
+    const index = selectedAudiologists.findIndex((a) => a.user_id === audiologistId);
+    return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
@@ -134,7 +160,7 @@ export function CalendarWeekView({ selectedDate, appointments, onAppointmentPres
         <View style={{ width: TIME_COLUMN_WIDTH }} />
         {weekDates.map((date, index) => {
           const dateKey = formatDateKey(date);
-          const dayAppointments = appointmentsByDate[dateKey] || [];
+          const dayAppointments = appointments.filter((apt) => apt.DateAppointment === dateKey);
           const isTodayDate = isToday(date);
           const isSelected = dateKey === selectedDate;
 
@@ -215,7 +241,6 @@ export function CalendarWeekView({ selectedDate, appointments, onAppointmentPres
           <View style={styles.daysGridContainer}>
             {weekDates.map((date, dayIndex) => {
               const dateKey = formatDateKey(date);
-              const dayAppointments = appointmentsByDate[dateKey] || [];
               const isTodayDate = isToday(date);
 
               return (
@@ -241,33 +266,47 @@ export function CalendarWeekView({ selectedDate, appointments, onAppointmentPres
                     />
                   )}
 
-                  {/* Appointments */}
-                  {dayAppointments.map((appointment) => {
-                    const position = getAppointmentPosition(appointment);
-                    const time = parseTime(appointment.TimeAppointment);
-                    const timeText = `${time.hour % 12 || 12}:${time.minute.toString().padStart(2, '0')}`;
+                  {/* Appointments for all audiologists */}
+                  {selectedAudiologists.map((audiologist, audiologistIndex) => {
+                    const audiologistAppointments = appointmentsByDateAndAudiologist[dateKey]?.[audiologist.user_id] || [];
+                    const color = getAudiologistColor(audiologist.user_id);
+                    const numAudiologists = selectedAudiologists.length;
+                    const appointmentWidth = (dayWidth - 4) / numAudiologists;
+                    const leftOffset = 2 + (audiologistIndex * appointmentWidth);
 
                     return (
-                      <TouchableOpacity
-                        key={appointment.AppointmentID}
-                        style={[
-                          styles.appointmentBlock,
-                          {
-                            top: position.top,
-                            height: Math.max(position.height, 30),
-                            backgroundColor: theme.colors.primary,
-                          },
-                        ]}
-                        onPress={() => onAppointmentPress?.(appointment)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.appointmentTime} numberOfLines={1}>
-                          {timeText}
-                        </Text>
-                        <Text style={styles.appointmentClient} numberOfLines={1}>
-                          {appointment.ClientName}
-                        </Text>
-                      </TouchableOpacity>
+                      <React.Fragment key={audiologist.user_id}>
+                        {audiologistAppointments.map((appointment) => {
+                          const position = getAppointmentPosition(appointment);
+                          const time = parseTime(appointment.TimeAppointment);
+                          const timeText = `${time.hour % 12 || 12}:${time.minute.toString().padStart(2, '0')}`;
+
+                          return (
+                            <TouchableOpacity
+                              key={appointment.AppointmentID}
+                              style={[
+                                styles.appointmentBlock,
+                                {
+                                  top: position.top,
+                                  left: leftOffset,
+                                  width: appointmentWidth - 2,
+                                  height: Math.max(position.height, 30),
+                                  backgroundColor: color,
+                                },
+                              ]}
+                              onPress={() => onAppointmentPress?.(appointment)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.appointmentTime} numberOfLines={1}>
+                                {timeText}
+                              </Text>
+                              <Text style={styles.appointmentClient} numberOfLines={1}>
+                                {appointment.ClientName}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
                 </View>
@@ -387,8 +426,6 @@ const styles = StyleSheet.create({
   },
   appointmentBlock: {
     position: 'absolute',
-    left: 2,
-    right: 2,
     borderRadius: 4,
     padding: 4,
     overflow: 'hidden',

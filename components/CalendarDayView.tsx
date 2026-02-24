@@ -17,6 +17,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { IconSymbol } from '@/components/IconSymbol';
+import { Audiologist } from '@/types';
 
 interface Appointment {
   AppointmentID: string;
@@ -25,20 +26,36 @@ interface Appointment {
   TimeAppointment: string;
   Duration?: number;
   Status?: string;
+  audiologistId?: string;
+  audiologistName?: string;
 }
 
 interface CalendarDayViewProps {
   selectedDate: string;
   appointments: Appointment[];
+  selectedAudiologists: Audiologist[];
   onAppointmentPress?: (appointment: Appointment) => void;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const MIN_SLOT_HEIGHT = 40; // 60-minute slots
-const DEFAULT_SLOT_HEIGHT = 60; // 30-minute slots
-const MAX_SLOT_HEIGHT = 120; // 15-minute slots
+const MIN_SLOT_HEIGHT = 40;
+const DEFAULT_SLOT_HEIGHT = 60;
+const MAX_SLOT_HEIGHT = 120;
+const TIME_COLUMN_WIDTH = 70;
 
-export function CalendarDayView({ selectedDate, appointments, onAppointmentPress }: CalendarDayViewProps) {
+// Color palette for audiologists
+const AUDIOLOGIST_COLORS = [
+  '#007AFF', // Blue
+  '#34C759', // Green
+  '#FF9500', // Orange
+  '#FF3B30', // Red
+  '#AF52DE', // Purple
+  '#5AC8FA', // Light Blue
+  '#FF2D55', // Pink
+  '#FFCC00', // Yellow
+];
+
+export function CalendarDayView({ selectedDate, appointments, selectedAudiologists, onAppointmentPress }: CalendarDayViewProps) {
   const theme = useTheme();
   const [slotHeight, setSlotHeight] = useState(DEFAULT_SLOT_HEIGHT);
   const scale = useSharedValue(1);
@@ -48,12 +65,12 @@ export function CalendarDayView({ selectedDate, appointments, onAppointmentPress
   // Generate time slots based on current zoom level
   const generateTimeSlots = () => {
     const slots = [];
-    let interval = 30; // Default 30-minute intervals
+    let interval = 30;
     
     if (slotHeight <= MIN_SLOT_HEIGHT) {
-      interval = 60; // 60-minute intervals (zoomed out)
+      interval = 60;
     } else if (slotHeight >= MAX_SLOT_HEIGHT) {
-      interval = 15; // 15-minute intervals (zoomed in)
+      interval = 15;
     }
 
     for (let hour = 0; hour < 24; hour++) {
@@ -136,6 +153,24 @@ export function CalendarDayView({ selectedDate, appointments, onAppointmentPress
 
   const intervalText = slotHeight <= MIN_SLOT_HEIGHT ? '60 min' : slotHeight >= MAX_SLOT_HEIGHT ? '15 min' : '30 min';
 
+  // Calculate column width based on number of audiologists
+  const numAudiologists = selectedAudiologists.length;
+  const availableWidth = SCREEN_WIDTH - TIME_COLUMN_WIDTH - 40;
+  const columnWidth = availableWidth / numAudiologists;
+
+  // Group appointments by audiologist
+  const appointmentsByAudiologist: { [key: string]: Appointment[] } = {};
+  selectedAudiologists.forEach((audiologist) => {
+    appointmentsByAudiologist[audiologist.user_id] = appointments.filter(
+      (apt) => apt.audiologistId === audiologist.user_id
+    );
+  });
+
+  // Get color for audiologist
+  const getAudiologistColor = (index: number): string => {
+    return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
@@ -153,6 +188,31 @@ export function CalendarDayView({ selectedDate, appointments, onAppointmentPress
             {intervalText}
           </Text>
         </View>
+      </View>
+
+      {/* Audiologist headers */}
+      <View style={[styles.audiologistHeaders, { backgroundColor: theme.colors.card }]}>
+        <View style={{ width: TIME_COLUMN_WIDTH }} />
+        {selectedAudiologists.map((audiologist, index) => {
+          const color = getAudiologistColor(index);
+          const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
+          
+          return (
+            <View key={audiologist.user_id} style={[styles.audiologistHeader, { width: columnWidth }]}>
+              <View style={[styles.audiologistColorDot, { backgroundColor: color }]} />
+              <Text style={[styles.audiologistName, { color: theme.colors.text }]} numberOfLines={1}>
+                {audiologist.full_name}
+              </Text>
+              {appointmentCount > 0 && (
+                <View style={[styles.appointmentCountBadge, { backgroundColor: color }]}>
+                  <Text style={styles.appointmentCountText}>
+                    {appointmentCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
       </View>
 
       <GestureDetector gesture={pinchGesture}>
@@ -175,66 +235,65 @@ export function CalendarDayView({ selectedDate, appointments, onAppointmentPress
                 ))}
               </View>
 
-              {/* Grid and appointments */}
-              <View style={styles.gridColumn}>
-                {/* Grid lines */}
-                {timeSlots.map((slot, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.gridLine,
-                      { height: slotHeight, borderTopColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
-                    ]}
-                  />
-                ))}
-
-                {/* Current time indicator */}
-                {isToday && (
-                  <View
-                    style={[
-                      styles.currentTimeIndicator,
-                      { top: currentTimePosition, backgroundColor: theme.colors.primary },
-                    ]}
-                  >
-                    <View style={[styles.currentTimeDot, { backgroundColor: theme.colors.primary }]} />
-                    <View style={[styles.currentTimeLine, { backgroundColor: theme.colors.primary }]} />
-                  </View>
-                )}
-
-                {/* Appointments */}
-                {appointments.map((appointment) => {
-                  const position = getAppointmentPosition(appointment);
-                  const timeText = formatTimeDisplay(
-                    parseTime(appointment.TimeAppointment).hour,
-                    parseTime(appointment.TimeAppointment).minute
-                  );
+              {/* Audiologist columns */}
+              <View style={styles.columnsContainer}>
+                {selectedAudiologists.map((audiologist, audiologistIndex) => {
+                  const color = getAudiologistColor(audiologistIndex);
+                  const audiologistAppointments = appointmentsByAudiologist[audiologist.user_id] || [];
 
                   return (
-                    <TouchableOpacity
-                      key={appointment.AppointmentID}
-                      style={[
-                        styles.appointmentBlock,
-                        {
-                          top: position.top,
-                          height: Math.max(position.height, 40),
-                          backgroundColor: theme.colors.primary,
-                        },
-                      ]}
-                      onPress={() => onAppointmentPress?.(appointment)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.appointmentTime} numberOfLines={1}>
-                        {timeText}
-                      </Text>
-                      <Text style={styles.appointmentClient} numberOfLines={1}>
-                        {appointment.ClientName}
-                      </Text>
-                      {position.height > 60 && (
-                        <Text style={styles.appointmentAudiologist} numberOfLines={1}>
-                          {appointment.UserName}
-                        </Text>
+                    <View key={audiologist.user_id} style={[styles.audiologistColumn, { width: columnWidth }]}>
+                      {/* Grid lines */}
+                      {timeSlots.map((slot, index) => (
+                        <View
+                          key={index}
+                          style={[
+                            styles.gridLine,
+                            { height: slotHeight, borderTopColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
+                          ]}
+                        />
+                      ))}
+
+                      {/* Current time indicator */}
+                      {isToday && (
+                        <View
+                          style={[
+                            styles.currentTimeIndicator,
+                            { top: currentTimePosition, backgroundColor: theme.colors.primary },
+                          ]}
+                        />
                       )}
-                    </TouchableOpacity>
+
+                      {/* Appointments */}
+                      {audiologistAppointments.map((appointment) => {
+                        const position = getAppointmentPosition(appointment);
+                        const time = parseTime(appointment.TimeAppointment);
+                        const timeText = formatTimeDisplay(time.hour, time.minute);
+
+                        return (
+                          <TouchableOpacity
+                            key={appointment.AppointmentID}
+                            style={[
+                              styles.appointmentBlock,
+                              {
+                                top: position.top,
+                                height: Math.max(position.height, 40),
+                                backgroundColor: color,
+                              },
+                            ]}
+                            onPress={() => onAppointmentPress?.(appointment)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.appointmentTime} numberOfLines={1}>
+                              {timeText}
+                            </Text>
+                            <Text style={styles.appointmentClient} numberOfLines={2}>
+                              {appointment.ClientName}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   );
                 })}
               </View>
@@ -282,6 +341,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  audiologistHeaders: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  audiologistHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  audiologistColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  audiologistName: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  appointmentCountBadge: {
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  appointmentCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   calendarContainer: {
     flex: 1,
   },
@@ -290,9 +387,10 @@ const styles = StyleSheet.create({
   },
   timelineContainer: {
     flexDirection: 'row',
+    paddingHorizontal: 20,
   },
   timeLabelsColumn: {
-    width: 70,
+    width: TIME_COLUMN_WIDTH,
     paddingTop: 0,
   },
   timeSlot: {
@@ -305,9 +403,14 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontWeight: '500',
   },
-  gridColumn: {
+  columnsContainer: {
     flex: 1,
+    flexDirection: 'row',
+  },
+  audiologistColumn: {
     position: 'relative',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(0,0,0,0.1)',
   },
   gridLine: {
     borderTopWidth: 1,
@@ -316,45 +419,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  currentTimeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginLeft: -5,
-  },
-  currentTimeLine: {
-    flex: 1,
     height: 2,
+    zIndex: 10,
   },
   appointmentBlock: {
     position: 'absolute',
-    left: 8,
-    right: 8,
-    borderRadius: 8,
-    padding: 8,
+    left: 2,
+    right: 2,
+    borderRadius: 6,
+    padding: 6,
     overflow: 'hidden',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: 'rgba(255,255,255,0.5)',
   },
   appointmentTime: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 2,
   },
   appointmentClient: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-  appointmentAudiologist: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
   },
   footer: {
     paddingHorizontal: 20,

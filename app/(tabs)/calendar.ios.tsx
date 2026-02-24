@@ -21,6 +21,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import moment from 'moment';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -35,6 +36,9 @@ interface HeardatAppointment {
   Duration?: number;
   Status?: string;
   Notes?: string;
+  UserIDAssigned?: string;
+  audiologistId?: string;
+  audiologistName?: string;
 }
 
 export default function CalendarScreen() {
@@ -51,39 +55,84 @@ export default function CalendarScreen() {
   const [sideNavVisible, setSideNavVisible] = useState(false);
 
   const loadAppointments = useCallback(async () => {
-    if (!user) {
-      console.log('User not available, skipping appointment load');
+    if (!user || selectedAudiologists.length === 0) {
+      console.log('[Calendar] No user or no audiologists selected, clearing appointments');
+      setAppointments([]);
       return;
     }
 
-    console.log('Loading appointments for date:', selectedDate);
+    console.log('[Calendar] Loading appointments for', selectedAudiologists.length, 'audiologists on date:', selectedDate);
     try {
       setIsLoading(true);
 
-      const data = await getUserAppointments(selectedDate, selectedDate);
-      console.log('Appointments API response:', data);
+      // Calculate date range based on view mode
+      let startDate = selectedDate;
+      let endDate = selectedDate;
 
-      if (data && data.appointments && Array.isArray(data.appointments)) {
-        console.log('Appointments loaded:', data.appointments.length);
-        setAppointments(data.appointments);
-      } else {
-        console.log('No appointments data in response');
-        setAppointments([]);
+      if (viewMode === 'week') {
+        // Get the week range
+        const date = moment(selectedDate);
+        startDate = date.clone().startOf('week').format('YYYY-MM-DD');
+        endDate = date.clone().endOf('week').format('YYYY-MM-DD');
+      } else if (viewMode === 'month') {
+        // Get the month range
+        const date = moment(selectedDate);
+        startDate = date.clone().startOf('month').format('YYYY-MM-DD');
+        endDate = date.clone().endOf('month').format('YYYY-MM-DD');
       }
+
+      console.log('[Calendar] Fetching appointments from', startDate, 'to', endDate);
+
+      // Fetch appointments for each selected audiologist
+      const allAppointments: HeardatAppointment[] = [];
+
+      for (const audiologist of selectedAudiologists) {
+        console.log('[Calendar] Fetching appointments for audiologist:', audiologist.full_name, 'ID:', audiologist.user_id);
+        
+        try {
+          const searchUser = {
+            CompanyID: user.CompanyID,
+            BranchID: user.BranchID,
+            UserID: audiologist.user_id,
+          };
+
+          const data = await getUserAppointments(startDate, endDate, searchUser);
+          
+          if (data && data.appointments && Array.isArray(data.appointments)) {
+            console.log('[Calendar] Found', data.appointments.length, 'appointments for', audiologist.full_name);
+            
+            // Add audiologist info to each appointment
+            const appointmentsWithAudiologist = data.appointments.map((apt: HeardatAppointment) => ({
+              ...apt,
+              audiologistName: audiologist.full_name,
+              audiologistId: audiologist.user_id,
+            }));
+            
+            allAppointments.push(...appointmentsWithAudiologist);
+          } else {
+            console.log('[Calendar] No appointments found for', audiologist.full_name);
+          }
+        } catch (error) {
+          console.error('[Calendar] Error fetching appointments for audiologist', audiologist.full_name, ':', error);
+        }
+      }
+
+      console.log('[Calendar] Total appointments loaded:', allAppointments.length);
+      setAppointments(allAppointments);
     } catch (error) {
-      console.error('Failed to load appointments:', error);
+      console.error('[Calendar] Failed to load appointments:', error);
       setAppointments([]);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, user]);
+  }, [selectedDate, user, selectedAudiologists, viewMode]);
 
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
 
   const handleRefresh = async () => {
-    console.log('User triggered refresh');
+    console.log('[Calendar] User triggered refresh');
     setIsRefreshing(true);
     await loadAppointments();
     setIsRefreshing(false);
@@ -104,20 +153,20 @@ export default function CalendarScreen() {
         return `${displayHours}:${minutes} ${ampm}`;
       }
     } catch (err) {
-      console.error('Error formatting time:', err);
+      console.error('[Calendar] Error formatting time:', err);
     }
 
     return timeString;
   }
 
   function onDayPress(day: any) {
-    console.log('Day pressed:', day.dateString);
+    console.log('[Calendar] Day pressed:', day.dateString);
     setSelectedDate(day.dateString);
     setViewMode('day');
   }
 
   function handleDayPressFromWeek(date: string) {
-    console.log('Day pressed from week view:', date);
+    console.log('[Calendar] Day pressed from week view:', date);
     setSelectedDate(date);
     setViewMode('day');
   }
@@ -138,6 +187,14 @@ export default function CalendarScreen() {
     selected: true,
     selectedColor: theme.colors.primary,
   };
+
+  // Filter appointments for selected date (for month view)
+  const selectedDateAppointments = appointments.filter(
+    (apt) => apt.DateAppointment === selectedDate
+  );
+
+  const noAudiologistsSelectedText = 'No audiologists selected';
+  const selectAudiologistsText = 'Please select audiologists from the dropdown above';
 
   return (
     <SafeAreaView
@@ -217,7 +274,22 @@ export default function CalendarScreen() {
         </TouchableOpacity>
       </View>
 
-      {isLoading && !isRefreshing ? (
+      {selectedAudiologists.length === 0 ? (
+        <View style={styles.emptyStateContainer}>
+          <IconSymbol
+            ios_icon_name="person.3.fill"
+            android_material_icon_name="group"
+            size={64}
+            color="#666"
+          />
+          <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>
+            {noAudiologistsSelectedText}
+          </Text>
+          <Text style={[styles.emptyStateText, { color: '#666' }]}>
+            {selectAudiologistsText}
+          </Text>
+        </View>
+      ) : isLoading && !isRefreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
@@ -236,7 +308,8 @@ export default function CalendarScreen() {
             <CalendarDayView
               selectedDate={selectedDate}
               appointments={appointments}
-              onAppointmentPress={(apt) => console.log('Appointment pressed:', apt)}
+              selectedAudiologists={selectedAudiologists}
+              onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
             />
           )}
 
@@ -244,7 +317,8 @@ export default function CalendarScreen() {
             <CalendarWeekView
               selectedDate={selectedDate}
               appointments={appointments}
-              onAppointmentPress={(apt) => console.log('Appointment pressed:', apt)}
+              selectedAudiologists={selectedAudiologists}
+              onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
               onDayPress={handleDayPressFromWeek}
             />
           )}
@@ -279,7 +353,7 @@ export default function CalendarScreen() {
                   Appointments for {selectedDate}
                 </Text>
 
-                {appointments.length === 0 ? (
+                {selectedDateAppointments.length === 0 ? (
                   <View style={styles.emptyState}>
                     <IconSymbol
                       ios_icon_name="calendar.badge.exclamationmark"
@@ -292,7 +366,7 @@ export default function CalendarScreen() {
                     </Text>
                   </View>
                 ) : (
-                  appointments.map((apt) => {
+                  selectedDateAppointments.map((apt) => {
                     const timeText = formatTime(apt.TimeAppointment);
 
                     return (
@@ -315,7 +389,7 @@ export default function CalendarScreen() {
                           {apt.ClientName}
                         </Text>
 
-                        {apt.UserName && (
+                        {apt.audiologistName && (
                           <View style={styles.appointmentDetail}>
                             <IconSymbol
                               ios_icon_name="person.fill"
@@ -324,7 +398,7 @@ export default function CalendarScreen() {
                               color="#98989D"
                             />
                             <Text style={[styles.appointmentDetailText, { color: '#98989D' }]}>
-                              {apt.UserName}
+                              {apt.audiologistName}
                             </Text>
                           </View>
                         )}
@@ -399,6 +473,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    gap: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    textAlign: 'center',
   },
   monthViewContainer: {
     padding: 16,
