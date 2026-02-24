@@ -126,7 +126,7 @@ export default function CreateAppointmentScreen() {
       }));
 
       const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => ({
-        id: proc.ProceduresID || proc.id,
+        id: proc.ProcedureID || proc.id,
         name: proc.Name || 'Unknown',
         description: proc.Description || proc.description,
         duration_minutes: proc.Duration || proc.duration_minutes || 30,
@@ -254,22 +254,22 @@ export default function CreateAppointmentScreen() {
       // Build appointment form data matching Heardat API expectations
       const appointmentFormData: Record<string, any> = {
         AppointmentID: "0",
-        DateAppointment: formatDateForAPI(date),
+        DateAppointment: date.toISOString(),
         Active: "1",
         Deleted: "0",
         BranchID: selectedBranch!.id,
         Source: "0",
         UserIDAssigned: selectedExaminer!.id,
-        Duration: duration.toString(),
+        Duration: reformatDurationForAPI(duration),
         ProceduresID: selectedProcedure!.id,
         ConsoltationID: "0",
         Type: "Booked Out",
         UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
         RemindMe: sendReminders ? "1" : "0",
-        DateEndAppointment: formatDateForAPI(date),
+        DateEndAppointment: date.toISOString(),
         UserID: credentials.userId,
         Userkey: credentials.userKey,
-        Companykey: credentials.companyId,
+        Companykey: credentials.companyKey,
         Sessionkey: credentials.sessionKey,
         CompanyID: credentials.companyId,
         PatientID: selectedClient!.id,
@@ -479,6 +479,17 @@ export default function CreateAppointmentScreen() {
       return `${mins} min${mins > 1 ? 's' : ''}`;
     }
   };
+
+  const reformatDurationForAPI = (totalMinutes: number):string => {
+  const hours = Math.floor(totalMinutes / 60); // Get the whole number of hours
+  const minutes = totalMinutes % 60;           // Get the remainder minutes
+
+  // Optional: Add leading zero to minutes if less than 10
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+
+  return `${formattedHours}:${formattedMinutes}`;
+}
 
   const renderDropdown = (
     label: string,

@@ -14,7 +14,7 @@ import { useTheme } from '@react-navigation/native';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Audiologist } from '@/types';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getHeardatCredentials, heardatApiCall } from '@/utils/api';
+import { getHeardatCredentials, getUsers, heardatApiCall } from '@/utils/api';
 
 export function AudiologistSelector() {
   const theme = useTheme();
@@ -35,13 +35,8 @@ export function AudiologistSelector() {
     try {
       setIsLoading(true);
       const credentials = await getHeardatCredentials();
-      const params = {
-          CompanyID: credentials.companyId || "0",
-          UserID: credentials.userId || "0",
-          Key: credentials.userKey || "0"
-      };
-
-      const data = await heardatApiCall('Users', params);
+      const data = await getUsers();
+      // const data = await heardatApiCall('AppointmentUsers', params);
       console.log('[AudiologistSelector] Audiologists API raw response:', data);
 
       // Parse the response if it's a string
@@ -76,7 +71,7 @@ export function AudiologistSelector() {
         const mappedAudiologists: Audiologist[] = parsedData.map((user: any) => ({
           id: user.UserID?.toString() || user.id,
           user_id: user.UserID?.toString() || user.id,
-          full_name: user.Name || user.FullName + ' ' + user.LastName || 'Unknown',
+          full_name: user.Name || user.FirstName + ' ' + user.LastName || 'Unknown',
           specialization: user.Specialization || '',
           is_active: user.Active === '1' || user.is_active === true,
         }));

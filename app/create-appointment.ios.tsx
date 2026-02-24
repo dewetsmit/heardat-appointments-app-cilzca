@@ -247,7 +247,7 @@ export default function CreateAppointmentScreen() {
         BranchID: selectedBranch!.id,
         Source: "0",
         UserIDAssigned: selectedExaminer!.id,
-        Duration: duration.toString(),
+        Duration: reformatDurationForAPI(duration),
         ProceduresID: selectedProcedure!.id,
         ConsoltationID: "0",
         Type: "Booked Out",
@@ -466,6 +466,18 @@ export default function CreateAppointmentScreen() {
       return `${mins} min${mins > 1 ? 's' : ''}`;
     }
   };
+
+    const reformatDurationForAPI = (totalMinutes: number):string => {
+  const hours = Math.floor(totalMinutes / 60); // Get the whole number of hours
+  const minutes = totalMinutes % 60;           // Get the remainder minutes
+
+  // Optional: Add leading zero to minutes if less than 10
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+
+  return `${formattedHours}:${formattedMinutes}`;
+}
+
 
   const renderDropdown = (
     label: string,
