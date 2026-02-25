@@ -6,7 +6,7 @@ import { Calendar } from 'react-native-calendars';
 import { getUserAppointments, formatDateForAPI } from '@/utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -34,13 +34,19 @@ interface HeardatAppointment {
   UserName: string;
   DateAppointment: string;
   TimeAppointment: string;
-  Duration?: number;
+  Duration?: string;
   Status?: string;
   Notes?: string;
   UserIDAssigned?: string;
   audiologistId?: string;
   audiologistName?: string;
 }
+
+// Helper function to get audiologist color for dots
+const AUDIOLOGIST_COLORS = [
+  '#007AFF', '#34C759', '#FF9500', '#FF3B30',
+  '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
+];
 
 export default function CalendarScreen() {
   const theme = useTheme();
@@ -54,16 +60,12 @@ export default function CalendarScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sideNavVisible, setSideNavVisible] = useState(false);
- // Helper function to get audiologist color for dots
-  const AUDIOLOGIST_COLORS = [
-    '#007AFF', '#34C759', '#FF9500', '#FF3B30',
-    '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
-  ];
 
-  const getAudiologistColorForDot = (audiologistId: string): string => {
+  const getAudiologistColorForDot = useCallback((audiologistId: string): string => {
     const index = selectedAudiologists.findIndex((a) => a.user_id === audiologistId);
     return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
-  };
+  }, [selectedAudiologists]);
+
   const loadAppointments = useCallback(async () => {
     if (!user || selectedAudiologists.length === 0) {
       console.log('[Calendar] No user or no audiologists selected, clearing appointments');
@@ -216,47 +218,55 @@ export default function CalendarScreen() {
     console.log('[Calendar] Navigated to next:', newDate.format('YYYY-MM-DD'));
   };
 
-  // Build marked dates for month view with colored dots
-  const markedDates = appointments.reduce((acc, apt) => {
-    const dateKey = apt.DateAppointment;
-    if (dateKey) {
-      // If date already has appointments, add to the dots array
-      if (acc[dateKey]) {
-        // Check if we already have a dot for this audiologist
-        const existingDot = acc[dateKey].dots?.find((dot: any) => dot.key === apt.audiologistId);
-        if (!existingDot && acc[dateKey].dots) {
-          acc[dateKey].dots.push({
-            key: apt.audiologistId,
-            color: getAudiologistColorForDot(apt.audiologistId || ''),
-          });
+  // Build marked dates for month view with colored dots - FIXED with useMemo
+  const markedDates = useMemo(() => {
+    const marks: any = {};
+    
+    appointments.forEach((apt) => {
+      // Format the date key properly from ISO timestamp
+      const dateKey = moment(apt.DateAppointment).format('YYYY-MM-DD');
+      
+      if (dateKey) {
+        // If date already has appointments, add to the dots array
+        if (marks[dateKey]) {
+          // Check if we already have a dot for this audiologist
+          const existingDot = marks[dateKey].dots?.find((dot: any) => dot.key === apt.audiologistId);
+          if (!existingDot && marks[dateKey].dots) {
+            marks[dateKey].dots.push({
+              key: apt.audiologistId,
+              color: getAudiologistColorForDot(apt.audiologistId || ''),
+            });
+          }
+        } else {
+          // First appointment for this date
+          marks[dateKey] = {
+            marked: true,
+            dots: [{
+              key: apt.audiologistId,
+              color: getAudiologistColorForDot(apt.audiologistId || ''),
+            }],
+          };
         }
-      } else {
-        // First appointment for this date
-        acc[dateKey] = {
-          marked: true,
-          dots: [{
-            key: apt.audiologistId,
-            color: getAudiologistColorForDot(apt.audiologistId || ''),
-          }],
-        };
       }
-    }
-    return acc;
-  }, {} as any);
+    });
 
-  // Add selected date styling
-  markedDates[selectedDate] = {
-    ...markedDates[selectedDate],
-    selected: true,
-    selectedColor: theme.colors.primary,
-  };
+    // Add selected date styling
+    marks[selectedDate] = {
+      ...marks[selectedDate],
+      selected: true,
+      selectedColor: theme.colors.primary,
+    };
 
- 
+    return marks;
+  }, [appointments, selectedDate, theme.colors.primary, getAudiologistColorForDot]);
 
   // Filter appointments for selected date (for month view)
-  const selectedDateAppointments = appointments.filter(
-    (apt) => apt.DateAppointment === selectedDate
-  );
+  const selectedDateAppointments = useMemo(() => {
+    return appointments.filter((apt) => {
+      const aptDate = moment(apt.DateAppointment).format('YYYY-MM-DD');
+      return aptDate === selectedDate;
+    });
+  }, [appointments, selectedDate]);
 
   const noAudiologistsSelectedText = 'No audiologists selected';
   const selectAudiologistsText = 'Please select audiologists from the dropdown above';
@@ -458,7 +468,7 @@ export default function CalendarScreen() {
                           </Text>
                           {apt.Duration && (
                             <Text style={[styles.appointmentDuration, { color: theme.dark ? '#98989D' : '#666' }]}>
-                              {apt.Duration} min
+                              {apt.Duration}
                             </Text>
                           )}
                         </View>

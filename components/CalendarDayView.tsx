@@ -24,7 +24,7 @@ interface Appointment {
   ClientName: string;
   UserName: string;
   DateAppointment: string;
-  Duration?: number;
+  Duration?: string;
   Status?: string;
   audiologistId?: string;
   Type: string;
@@ -60,6 +60,26 @@ const AUDIOLOGIST_COLORS = [
   '#FFCC00', // Yellow
 ];
 
+// Helper to parse duration string (HH:MM:SS) to minutes
+function parseDurationToMinutes(duration: string | undefined): number {
+  if (!duration) return 30;
+  
+  const parts = duration.split(':');
+  if (parts.length >= 2) {
+    const hours = parseInt(parts[0], 10) || 0;
+    const minutes = parseInt(parts[1], 10) || 0;
+    return hours * 60 + minutes;
+  }
+  
+  return 30;
+}
+
+// Check if appointment is a full-day event (> 8 hours)
+function isFullDayEvent(duration: string | undefined): boolean {
+  const minutes = parseDurationToMinutes(duration);
+  return minutes > 480; // 8 hours = 480 minutes
+}
+
 export function CalendarDayView({ 
   selectedDate, 
   appointments, 
@@ -73,6 +93,10 @@ export function CalendarDayView({
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Separate full-day events from regular appointments
+  const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
+  const regularAppointments = appointments.filter(apt => !isFullDayEvent(apt.Duration));
 
   // Swipe gesture handlers
   const swipeGesture = Gesture.Pan()
@@ -140,8 +164,8 @@ export function CalendarDayView({
     const pixelsPerMinute = slotHeight / minutesPerSlot;
     
     const top = totalMinutesFromStart * pixelsPerMinute;
-    const duration = appointment.Duration || 30;
-    const height = duration * pixelsPerMinute;
+    const durationMinutes = parseDurationToMinutes(appointment.Duration);
+    const height = durationMinutes * pixelsPerMinute;
     
     return { top, height };
   };
@@ -199,8 +223,13 @@ export function CalendarDayView({
 
   // Group appointments by audiologist
   const appointmentsByAudiologist: { [key: string]: Appointment[] } = {};
+  const fullDayEventsByAudiologist: { [key: string]: Appointment[] } = {};
+  
   selectedAudiologists.forEach((audiologist) => {
-    appointmentsByAudiologist[audiologist.user_id] = appointments.filter(
+    appointmentsByAudiologist[audiologist.user_id] = regularAppointments.filter(
+      (apt) => apt.audiologistId === audiologist.user_id
+    );
+    fullDayEventsByAudiologist[audiologist.user_id] = fullDayEvents.filter(
       (apt) => apt.audiologistId === audiologist.user_id
     );
   });
@@ -228,6 +257,62 @@ export function CalendarDayView({
           </Text>
         </View>
       </View>
+
+      {/* Full-day events section */}
+      {fullDayEvents.length > 0 && (
+        <View style={[styles.fullDayEventsContainer, { backgroundColor: theme.colors.card }]}>
+          <View style={styles.fullDayEventsHeader}>
+            <IconSymbol
+              ios_icon_name="calendar"
+              android_material_icon_name="event"
+              size={16}
+              color={theme.dark ? '#98989D' : '#666'}
+            />
+            <Text style={[styles.fullDayEventsTitle, { color: theme.dark ? '#98989D' : '#666' }]}>
+              All-Day Events
+            </Text>
+          </View>
+          <View style={styles.fullDayEventsList}>
+            {selectedAudiologists.map((audiologist, index) => {
+              const color = getAudiologistColor(index);
+              const events = fullDayEventsByAudiologist[audiologist.user_id] || [];
+              
+              return (
+                <React.Fragment key={audiologist.user_id}>
+                  {events.map((event) => {
+                    const durationMinutes = parseDurationToMinutes(event.Duration);
+                    const durationHours = Math.floor(durationMinutes / 60);
+                    const durationText = `${durationHours}h`;
+
+                    return (
+                      <TouchableOpacity
+                        key={event.AppointmentID}
+                        style={[styles.fullDayEventCard, { backgroundColor: color }]}
+                        onPress={() => onAppointmentPress?.(event)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.fullDayEventContent}>
+                          <Text style={styles.fullDayEventType} numberOfLines={1}>
+                            {event.Type}
+                          </Text>
+                          <Text style={styles.fullDayEventAudiologist} numberOfLines={1}>
+                            {audiologist.full_name}
+                          </Text>
+                        </View>
+                        <View style={styles.fullDayEventBadge}>
+                          <Text style={styles.fullDayEventBadgeText}>
+                            {durationText}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       {/* Audiologist headers */}
       <View style={[styles.audiologistHeaders, { backgroundColor: theme.colors.card }]}>
@@ -305,7 +390,6 @@ export function CalendarDayView({
 
                       {/* Appointments */}
                       {audiologistAppointments.map((appointment) => {
-                        console.log('[CalendarDayView]', appointment);
                         const position = getAppointmentPosition(appointment);
                         const DateStringToDate = new Date(appointment.DateAppointment);
                         const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
@@ -345,7 +429,7 @@ export function CalendarDayView({
 
       <View style={[styles.footer, { backgroundColor: theme.colors.card }]}>
         <Text style={[styles.footerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-          Pinch to zoom • Swipe to navigate • {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
+          Pinch to zoom • Swipe to navigate • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''}
         </Text>
       </View>
     </View>
@@ -381,6 +465,61 @@ const styles = StyleSheet.create({
   zoomText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  fullDayEventsContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  fullDayEventsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  fullDayEventsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  fullDayEventsList: {
+    gap: 8,
+  },
+  fullDayEventCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: 'rgba(255,255,255,0.5)',
+  },
+  fullDayEventContent: {
+    flex: 1,
+    gap: 2,
+  },
+  fullDayEventType: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  fullDayEventAudiologist: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  fullDayEventBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  fullDayEventBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   audiologistHeaders: {
     flexDirection: 'row',

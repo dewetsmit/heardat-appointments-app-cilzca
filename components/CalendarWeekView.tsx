@@ -11,13 +11,14 @@ import {
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { Audiologist } from '@/types';
+import { IconSymbol } from '@/components/IconSymbol';
 
 interface Appointment {
   AppointmentID: string;
   ClientName: string;
   UserName: string;
   DateAppointment: string;
-  Duration?: number;
+  Duration?: string;
   Status?: string;
   audiologistId?: string;
   Type: string;
@@ -52,6 +53,26 @@ const AUDIOLOGIST_COLORS = [
   '#FFCC00', // Yellow
 ];
 
+// Helper to parse duration string (HH:MM:SS) to minutes
+function parseDurationToMinutes(duration: string | undefined): number {
+  if (!duration) return 30;
+  
+  const parts = duration.split(':');
+  if (parts.length >= 2) {
+    const hours = parseInt(parts[0], 10) || 0;
+    const minutes = parseInt(parts[1], 10) || 0;
+    return hours * 60 + minutes;
+  }
+  
+  return 30;
+}
+
+// Check if appointment is a full-day event (> 8 hours)
+function isFullDayEvent(duration: string | undefined): boolean {
+  const minutes = parseDurationToMinutes(duration);
+  return minutes > 480; // 8 hours = 480 minutes
+}
+
 export function CalendarWeekView({ 
   selectedDate, 
   appointments, 
@@ -63,6 +84,10 @@ export function CalendarWeekView({
 }: CalendarWeekViewProps) {
   const theme = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Separate full-day events from regular appointments
+  const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
+  const regularAppointments = appointments.filter(apt => !isFullDayEvent(apt.Duration));
 
   // Get the week dates
   const getWeekDates = () => {
@@ -139,23 +164,34 @@ export function CalendarWeekView({
     const pixelsPerMinute = SLOT_HEIGHT / 60;
     
     const top = totalMinutesFromStart * pixelsPerMinute;
-    const duration = appointment.Duration || 30;
-    const height = duration * pixelsPerMinute;
+    const durationMinutes = parseDurationToMinutes(appointment.Duration);
+    const height = durationMinutes * pixelsPerMinute;
     
     return { top, height };
   };
 
   // Group appointments by date and audiologist
   const appointmentsByDateAndAudiologist: { [dateKey: string]: { [audiologistId: string]: Appointment[] } } = {};
+  const fullDayEventsByDate: { [dateKey: string]: Appointment[] } = {};
   
   weekDates.forEach((date) => {
     const dateKey = formatDateKey(date);
     appointmentsByDateAndAudiologist[dateKey] = {};
+    fullDayEventsByDate[dateKey] = [];
     
     selectedAudiologists.forEach((audiologist) => {
-      appointmentsByDateAndAudiologist[dateKey][audiologist.user_id] = appointments.filter(
-        (apt) => apt.DateAppointment === dateKey && apt.audiologistId === audiologist.user_id
-      );
+      appointmentsByDateAndAudiologist[dateKey][audiologist.user_id] = regularAppointments.filter((apt) => {
+        const aptDate = new Date(apt.DateAppointment);
+        const aptDateKey = formatDateKey(aptDate);
+        return aptDateKey === dateKey && apt.audiologistId === audiologist.user_id;
+      });
+    });
+
+    // Get full-day events for this date
+    fullDayEventsByDate[dateKey] = fullDayEvents.filter((apt) => {
+      const aptDate = new Date(apt.DateAppointment);
+      const aptDateKey = formatDateKey(aptDate);
+      return aptDateKey === dateKey;
     });
   });
 
@@ -195,11 +231,12 @@ export function CalendarWeekView({
           {weekDates.map((date, index) => {
             const CalDateStringToDate = new Date(date);
             const dateKey = formatDateKey(CalDateStringToDate);
-            const dayAppointments = appointments.filter((apt) => {
+            const dayAppointments = regularAppointments.filter((apt) => {
               const AptDateStringToDate = new Date(apt.DateAppointment);
               const aptDateKey = formatDateKey(AptDateStringToDate);
-              return aptDateKey === dateKey
+              return aptDateKey === dateKey;
             });
+            const dayFullDayEvents = fullDayEventsByDate[dateKey] || [];
             const isTodayDate = isToday(date);
             const isSelected = dateKey === selectedDate;
 
@@ -246,10 +283,10 @@ export function CalendarWeekView({
                     {dayNumber}
                   </Text>
                 </View>
-                {dayAppointments.length > 0 && (
+                {(dayAppointments.length > 0 || dayFullDayEvents.length > 0) && (
                   <View style={styles.appointmentCountBadge}>
                     <Text style={styles.appointmentCountText}>
-                      {dayAppointments.length}
+                      {dayAppointments.length + dayFullDayEvents.length}
                     </Text>
                   </View>
                 )}
@@ -257,6 +294,44 @@ export function CalendarWeekView({
             );
           })}
         </View>
+
+        {/* Full-day events row */}
+        {fullDayEvents.length > 0 && (
+          <View style={[styles.fullDayEventsRow, { backgroundColor: theme.colors.card }]}>
+            <View style={{ width: TIME_COLUMN_WIDTH, paddingRight: 8 }}>
+              <Text style={[styles.fullDayLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                All Day
+              </Text>
+            </View>
+            <View style={styles.fullDayEventsGrid}>
+              {weekDates.map((date, index) => {
+                const dateKey = formatDateKey(date);
+                const dayFullDayEvents = fullDayEventsByDate[dateKey] || [];
+
+                return (
+                  <View key={index} style={[styles.fullDayEventCell, { width: dayWidth }]}>
+                    {dayFullDayEvents.map((event) => {
+                      const color = getAudiologistColor(event.audiologistId || '');
+                      
+                      return (
+                        <TouchableOpacity
+                          key={event.AppointmentID}
+                          style={[styles.fullDayEventBadge, { backgroundColor: color }]}
+                          onPress={() => onAppointmentPress?.(event)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.fullDayEventText} numberOfLines={1}>
+                            {event.Type}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <ScrollView
           ref={scrollViewRef}
@@ -359,7 +434,7 @@ export function CalendarWeekView({
 
         <View style={[styles.footer, { backgroundColor: theme.colors.card }]}>
           <Text style={[styles.footerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-            Swipe to navigate • {appointments.length} appointment{appointments.length !== 1 ? 's' : ''} this week
+            Swipe to navigate • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''} this week
           </Text>
         </View>
       </View>
@@ -426,6 +501,39 @@ const styles = StyleSheet.create({
   appointmentCountText: {
     fontSize: 10,
     fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  fullDayEventsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  fullDayLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'right',
+    paddingTop: 4,
+  },
+  fullDayEventsGrid: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  fullDayEventCell: {
+    paddingHorizontal: 2,
+    gap: 4,
+  },
+  fullDayEventBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(255,255,255,0.5)',
+  },
+  fullDayEventText: {
+    fontSize: 9,
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   scrollView: {
