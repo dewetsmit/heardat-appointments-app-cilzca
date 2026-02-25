@@ -37,6 +37,8 @@ interface CalendarWeekViewProps {
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_COLUMN_WIDTH = 60;
 const SLOT_HEIGHT = 60;
+const START_HOUR = 6; // 6am
+const END_HOUR = 19; // 7pm (19:00)
 
 // Color palette for audiologists
 const AUDIOLOGIST_COLORS = [
@@ -95,10 +97,10 @@ export function CalendarWeekView({
       }
     });
 
-  // Generate time slots (hourly)
+  // Generate time slots (6am to 7pm)
   const generateTimeSlots = () => {
     const slots = [];
-    for (let hour = 0; hour < 24; hour++) {
+    for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
       slots.push({
         hour,
         displayTime: formatHourDisplay(hour),
@@ -129,12 +131,14 @@ export function CalendarWeekView({
   };
 
   const getAppointmentPosition = (appointment: Appointment) => {
-        const DateStringToDate = new Date(appointment.DateAppointment);
+    const DateStringToDate = new Date(appointment.DateAppointment);
     const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
-    const totalMinutes = time.hour * 60 + time.minute;
+    
+    // Calculate minutes from START_HOUR (6am)
+    const totalMinutesFromStart = (time.hour - START_HOUR) * 60 + time.minute;
     const pixelsPerMinute = SLOT_HEIGHT / 60;
     
-    const top = totalMinutes * pixelsPerMinute;
+    const top = totalMinutesFromStart * pixelsPerMinute;
     const duration = appointment.Duration || 30;
     const height = duration * pixelsPerMinute;
     
@@ -159,7 +163,10 @@ export function CalendarWeekView({
   const currentTime = new Date();
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
-  const currentTimePosition = (currentHour * 60 + currentMinute) * (SLOT_HEIGHT / 60);
+  
+  // Calculate current time position relative to START_HOUR
+  const currentMinutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
+  const currentTimePosition = currentMinutesFromStart * (SLOT_HEIGHT / 60);
 
   const isToday = (date: Date) => {
     return date.toDateString() === new Date().toDateString();
@@ -274,6 +281,7 @@ export function CalendarWeekView({
               {weekDates.map((date, dayIndex) => {
                 const dateKey = formatDateKey(date);
                 const isTodayDate = isToday(date);
+                const showCurrentTimeIndicator = isTodayDate && currentHour >= START_HOUR && currentHour <= END_HOUR;
 
                 return (
                   <View key={dayIndex} style={[styles.dayColumn, { width: dayWidth }]}>
@@ -289,7 +297,7 @@ export function CalendarWeekView({
                     ))}
 
                     {/* Current time indicator */}
-                    {isTodayDate && (
+                    {showCurrentTimeIndicator && (
                       <View
                         style={[
                           styles.currentTimeIndicator,

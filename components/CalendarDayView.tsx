@@ -45,6 +45,8 @@ const MIN_SLOT_HEIGHT = 40;
 const DEFAULT_SLOT_HEIGHT = 60;
 const MAX_SLOT_HEIGHT = 120;
 const TIME_COLUMN_WIDTH = 70;
+const START_HOUR = 6; // 6am
+const END_HOUR = 19; // 7pm (19:00)
 
 // Color palette for audiologists
 const AUDIOLOGIST_COLORS = [
@@ -86,7 +88,7 @@ export function CalendarDayView({
       }
     });
 
-  // Generate time slots based on current zoom level
+  // Generate time slots based on current zoom level (6am to 7pm)
   const generateTimeSlots = () => {
     const slots = [];
     let interval = 30;
@@ -97,8 +99,11 @@ export function CalendarDayView({
       interval = 15;
     }
 
-    for (let hour = 0; hour < 24; hour++) {
+    for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
       for (let minute = 0; minute < 60; minute += interval) {
+        // Don't add slots after 7pm
+        if (hour === END_HOUR && minute > 0) break;
+        
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         slots.push({
           time: timeString,
@@ -128,11 +133,13 @@ export function CalendarDayView({
   const getAppointmentPosition = (appointment: Appointment) => {
     const DateStringToDate = new Date(appointment.DateAppointment);
     const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
-    const totalMinutes = time.hour * 60 + time.minute;
+    
+    // Calculate minutes from START_HOUR (6am)
+    const totalMinutesFromStart = (time.hour - START_HOUR) * 60 + time.minute;
     const minutesPerSlot = slotHeight <= MIN_SLOT_HEIGHT ? 60 : slotHeight >= MAX_SLOT_HEIGHT ? 15 : 30;
     const pixelsPerMinute = slotHeight / minutesPerSlot;
     
-    const top = totalMinutes * pixelsPerMinute;
+    const top = totalMinutesFromStart * pixelsPerMinute;
     const duration = appointment.Duration || 30;
     const height = duration * pixelsPerMinute;
     
@@ -168,9 +175,13 @@ export function CalendarDayView({
   const currentTime = new Date();
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
-  const currentTimePosition = (currentHour * 60 + currentMinute) * (slotHeight / (slotHeight <= MIN_SLOT_HEIGHT ? 60 : slotHeight >= MAX_SLOT_HEIGHT ? 15 : 30));
+  
+  // Calculate current time position relative to START_HOUR
+  const currentMinutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
+  const currentTimePosition = currentMinutesFromStart * (slotHeight / (slotHeight <= MIN_SLOT_HEIGHT ? 60 : slotHeight >= MAX_SLOT_HEIGHT ? 15 : 30));
 
   const isToday = new Date(selectedDate).toDateString() === new Date().toDateString();
+  const showCurrentTimeIndicator = isToday && currentHour >= START_HOUR && currentHour <= END_HOUR;
 
   const dateDisplay = new Date(selectedDate).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -283,7 +294,7 @@ export function CalendarDayView({
                       ))}
 
                       {/* Current time indicator */}
-                      {isToday && (
+                      {showCurrentTimeIndicator && (
                         <View
                           style={[
                             styles.currentTimeIndicator,
