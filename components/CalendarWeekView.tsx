@@ -310,8 +310,8 @@ export function CalendarWeekView({
                         <React.Fragment key={audiologist.user_id}>
                           {audiologistAppointments.map((appointment) => {
                             const position = getAppointmentPosition(appointment);
-                                const DateStringToDate = new Date(appointment.DateAppointment);
-    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
+                            const DateStringToDate = new Date(appointment.DateAppointment);
+                            const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
                             const timeText = `${time.hour % 12 || 12}:${time.minute.toString().padStart(2, '0')}`;
 
                             return (
