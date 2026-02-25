@@ -53,7 +53,16 @@ export default function CalendarScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sideNavVisible, setSideNavVisible] = useState(false);
+  // Helper function to get audiologist color for dots
+  const AUDIOLOGIST_COLORS = [
+    '#007AFF', '#34C759', '#FF9500', '#FF3B30',
+    '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
+  ];
 
+  const getAudiologistColorForDot = (audiologistId: string): string => {
+    const index = selectedAudiologists.findIndex((a) => a.user_id === audiologistId);
+    return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
+  };
   const loadAppointments = useCallback(async () => {
     if (!user || selectedAudiologists.length === 0) {
       console.log('[Calendar] No user or no audiologists selected, clearing appointments');
@@ -241,16 +250,7 @@ export default function CalendarScreen() {
     selectedColor: theme.colors.primary,
   };
 
-  // Helper function to get audiologist color for dots
-  const AUDIOLOGIST_COLORS = [
-    '#007AFF', '#34C759', '#FF9500', '#FF3B30',
-    '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
-  ];
 
-  const getAudiologistColorForDot = (audiologistId: string): string => {
-    const index = selectedAudiologists.findIndex((a) => a.user_id === audiologistId);
-    return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
-  };
 
   // Filter appointments for selected date (for month view)
   const selectedDateAppointments = appointments.filter(
