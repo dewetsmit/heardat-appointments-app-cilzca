@@ -48,6 +48,11 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
 
   const menuItems = [
     {
+      label: 'Profile',
+      icon: 'person',
+      route: '/profile',
+    },
+    {
       label: 'New Client',
       icon: 'person-add',
       route: '/new-client',

@@ -35,7 +35,6 @@ function RootLayoutNav() {
 
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
-    // Load MaterialIcons font for consistent icon display on iOS
     ...MaterialIcons.font,
   });
 
@@ -67,9 +66,7 @@ function RootLayoutNav() {
 
     console.log('Auth state changed:', { user: !!user, inAuthGroup, segments });
 
-    // Redirect logic: If user is logged in, go to calendar. If not, go to auth.
     if (user && !inAuthGroup) {
-      // User is authenticated and not in auth group - allow navigation
       console.log('User authenticated, allowing navigation');
     } else if (user && inAuthGroup) {
       console.log('User authenticated, redirecting to calendar');
@@ -84,13 +81,10 @@ function RootLayoutNav() {
     handleAuthRedirect();
   }, [handleAuthRedirect]);
 
-  // During initial load, redirect immediately to auth screen instead of showing loading
   if (!loaded || loading) {
-    // If fonts aren't loaded yet, return null to show native splash
     if (!loaded) {
       return null;
     }
-    // If fonts are loaded but auth is loading, redirect to auth screen
     return <Redirect href="/auth" />;
   }
 
