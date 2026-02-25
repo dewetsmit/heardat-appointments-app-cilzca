@@ -23,10 +23,11 @@ interface Appointment {
   AppointmentID: string;
   ClientName: string;
   UserName: string;
-  TimeAppointment: string;
+  DateAppointment: string;
   Duration?: number;
   Status?: string;
   audiologistId?: string;
+  Type: string;
   audiologistName?: string;
 }
 
@@ -102,7 +103,8 @@ export function CalendarDayView({ selectedDate, appointments, selectedAudiologis
   };
 
   const getAppointmentPosition = (appointment: Appointment) => {
-    const time = parseTime(appointment.TimeAppointment);
+    const DateStringToDate = new Date(appointment.DateAppointment);
+    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
     const totalMinutes = time.hour * 60 + time.minute;
     const minutesPerSlot = slotHeight <= MIN_SLOT_HEIGHT ? 60 : slotHeight >= MAX_SLOT_HEIGHT ? 15 : 30;
     const pixelsPerMinute = slotHeight / minutesPerSlot;
@@ -266,8 +268,10 @@ export function CalendarDayView({ selectedDate, appointments, selectedAudiologis
 
                       {/* Appointments */}
                       {audiologistAppointments.map((appointment) => {
+                        console.log('[CalendarDayView]', appointment);
                         const position = getAppointmentPosition(appointment);
-                        const time = parseTime(appointment.TimeAppointment);
+                        const DateStringToDate = new Date(appointment.DateAppointment);
+                        const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
                         const timeText = formatTimeDisplay(time.hour, time.minute);
 
                         return (
@@ -288,7 +292,7 @@ export function CalendarDayView({ selectedDate, appointments, selectedAudiologis
                               {timeText}
                             </Text>
                             <Text style={styles.appointmentClient} numberOfLines={2}>
-                              {appointment.ClientName}
+                              {appointment.Type}
                             </Text>
                           </TouchableOpacity>
                         );
