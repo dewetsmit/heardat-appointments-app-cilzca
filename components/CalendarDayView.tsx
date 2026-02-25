@@ -36,6 +36,8 @@ interface CalendarDayViewProps {
   appointments: Appointment[];
   selectedAudiologists: Audiologist[];
   onAppointmentPress?: (appointment: Appointment) => void;
+  onSwipeLeft?: () => void;
+  onSwipeRight?: () => void;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -56,12 +58,33 @@ const AUDIOLOGIST_COLORS = [
   '#FFCC00', // Yellow
 ];
 
-export function CalendarDayView({ selectedDate, appointments, selectedAudiologists, onAppointmentPress }: CalendarDayViewProps) {
+export function CalendarDayView({ 
+  selectedDate, 
+  appointments, 
+  selectedAudiologists, 
+  onAppointmentPress,
+  onSwipeLeft,
+  onSwipeRight 
+}: CalendarDayViewProps) {
   const theme = useTheme();
   const [slotHeight, setSlotHeight] = useState(DEFAULT_SLOT_HEIGHT);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Swipe gesture handlers
+  const swipeGesture = Gesture.Pan()
+    .onEnd((event) => {
+      const SWIPE_THRESHOLD = 50;
+      
+      if (event.translationX > SWIPE_THRESHOLD && onSwipeRight) {
+        console.log('[CalendarDayView] Swipe right detected - going to previous day');
+        onSwipeRight();
+      } else if (event.translationX < -SWIPE_THRESHOLD && onSwipeLeft) {
+        console.log('[CalendarDayView] Swipe left detected - going to next day');
+        onSwipeLeft();
+      }
+    });
 
   // Generate time slots based on current zoom level
   const generateTimeSlots = () => {
@@ -131,6 +154,9 @@ export function CalendarDayView({ selectedDate, appointments, selectedAudiologis
       savedScale.value = 1;
       scale.value = 1;
     });
+
+  // Combine gestures - pinch and swipe
+  const combinedGesture = Gesture.Race(pinchGesture, swipeGesture);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -217,7 +243,7 @@ export function CalendarDayView({ selectedDate, appointments, selectedAudiologis
         })}
       </View>
 
-      <GestureDetector gesture={pinchGesture}>
+      <GestureDetector gesture={combinedGesture}>
         <Animated.View style={[styles.calendarContainer, animatedStyle]}>
           <ScrollView
             ref={scrollViewRef}
@@ -308,7 +334,7 @@ export function CalendarDayView({ selectedDate, appointments, selectedAudiologis
 
       <View style={[styles.footer, { backgroundColor: theme.colors.card }]}>
         <Text style={[styles.footerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-          Pinch to zoom • {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
+          Pinch to zoom • Swipe to navigate • {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
         </Text>
       </View>
     </View>

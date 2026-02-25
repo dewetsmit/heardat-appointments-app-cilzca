@@ -62,7 +62,7 @@ export default function CalendarScreen() {
       return;
     }
 
-    console.log('[Calendar] Loading appointments for', selectedAudiologists.length, 'audiologists on date:', selectedDate);
+    console.log('[Calendar] Loading appointments for', selectedAudiologists.length, 'audiologists on date:', selectedDate, 'viewMode:', viewMode);
     try {
       setIsLoading(true);
 
@@ -72,17 +72,19 @@ export default function CalendarScreen() {
 
       if (viewMode === 'week') {
         // Get the week range
-        const date = moment(selectedDate);
+        const date = moment(selectedDate, 'YYYY-MM-DD');
         startDate = date.clone().startOf('week').format('YYYY-MM-DD');
         endDate = date.clone().endOf('week').format('YYYY-MM-DD');
+        console.log('[Calendar] Week view - fetching from', startDate, 'to', endDate);
       } else if (viewMode === 'month') {
         // Get the month range
-        const date = moment(selectedDate);
+        const date = moment(selectedDate, 'YYYY-MM-DD');
         startDate = date.clone().startOf('month').format('YYYY-MM-DD');
         endDate = date.clone().endOf('month').format('YYYY-MM-DD');
+        console.log('[Calendar] Month view - fetching from', startDate, 'to', endDate);
+      } else {
+        console.log('[Calendar] Day view - fetching for', selectedDate);
       }
-
-      console.log('[Calendar] Fetching appointments from', startDate, 'to', endDate);
 
       // Fetch appointments for each selected audiologist
       const allAppointments: HeardatAppointment[] = [];
@@ -172,21 +174,83 @@ export default function CalendarScreen() {
     setViewMode('day');
   }
 
+  // Navigate to previous/next day, week, or month
+  const navigatePrevious = () => {
+    const currentMoment = moment(selectedDate, 'YYYY-MM-DD');
+    let newDate;
+
+    if (viewMode === 'day') {
+      newDate = currentMoment.subtract(1, 'day');
+    } else if (viewMode === 'week') {
+      newDate = currentMoment.subtract(1, 'week');
+    } else {
+      newDate = currentMoment.subtract(1, 'month');
+    }
+
+    setSelectedDate(newDate.format('YYYY-MM-DD'));
+    console.log('[Calendar] Navigated to previous:', newDate.format('YYYY-MM-DD'));
+  };
+
+  const navigateNext = () => {
+    const currentMoment = moment(selectedDate, 'YYYY-MM-DD');
+    let newDate;
+
+    if (viewMode === 'day') {
+      newDate = currentMoment.add(1, 'day');
+    } else if (viewMode === 'week') {
+      newDate = currentMoment.add(1, 'week');
+    } else {
+      newDate = currentMoment.add(1, 'month');
+    }
+
+    setSelectedDate(newDate.format('YYYY-MM-DD'));
+    console.log('[Calendar] Navigated to next:', newDate.format('YYYY-MM-DD'));
+  };
+
+  // Build marked dates for month view with colored dots
   const markedDates = appointments.reduce((acc, apt) => {
     const dateKey = apt.DateAppointment;
     if (dateKey) {
-      acc[dateKey] = {
-        marked: true,
-        dotColor: theme.colors.primary,
-      };
+      // If date already has appointments, add to the dots array
+      if (acc[dateKey]) {
+        // Check if we already have a dot for this audiologist
+        const existingDot = acc[dateKey].dots?.find((dot: any) => dot.key === apt.audiologistId);
+        if (!existingDot && acc[dateKey].dots) {
+          acc[dateKey].dots.push({
+            key: apt.audiologistId,
+            color: getAudiologistColorForDot(apt.audiologistId || ''),
+          });
+        }
+      } else {
+        // First appointment for this date
+        acc[dateKey] = {
+          marked: true,
+          dots: [{
+            key: apt.audiologistId,
+            color: getAudiologistColorForDot(apt.audiologistId || ''),
+          }],
+        };
+      }
     }
     return acc;
   }, {} as any);
 
+  // Add selected date styling
   markedDates[selectedDate] = {
     ...markedDates[selectedDate],
     selected: true,
     selectedColor: theme.colors.primary,
+  };
+
+  // Helper function to get audiologist color for dots
+  const AUDIOLOGIST_COLORS = [
+    '#007AFF', '#34C759', '#FF9500', '#FF3B30',
+    '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
+  ];
+
+  const getAudiologistColorForDot = (audiologistId: string): string => {
+    const index = selectedAudiologists.findIndex((a) => a.user_id === audiologistId);
+    return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
   };
 
   // Filter appointments for selected date (for month view)
@@ -311,6 +375,8 @@ export default function CalendarScreen() {
               appointments={appointments}
               selectedAudiologists={selectedAudiologists}
               onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
+              onSwipeLeft={navigateNext}
+              onSwipeRight={navigatePrevious}
             />
           )}
 
@@ -321,6 +387,8 @@ export default function CalendarScreen() {
               selectedAudiologists={selectedAudiologists}
               onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
               onDayPress={handleDayPressFromWeek}
+              onSwipeLeft={navigateNext}
+              onSwipeRight={navigatePrevious}
             />
           )}
 
@@ -330,6 +398,7 @@ export default function CalendarScreen() {
                 current={selectedDate}
                 onDayPress={onDayPress}
                 markedDates={markedDates}
+                markingType="multi-dot"
                 theme={{
                   backgroundColor: theme.colors.background,
                   calendarBackground: theme.colors.card,
@@ -346,6 +415,14 @@ export default function CalendarScreen() {
                   textDayFontWeight: '400',
                   textMonthFontWeight: 'bold',
                   textDayHeaderFontWeight: '600',
+                }}
+                onPressArrowLeft={(subtractMonth) => {
+                  subtractMonth();
+                  navigatePrevious();
+                }}
+                onPressArrowRight={(addMonth) => {
+                  addMonth();
+                  navigateNext();
                 }}
               />
 
