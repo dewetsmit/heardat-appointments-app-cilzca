@@ -1,7 +1,8 @@
+
 {
   "expo": {
     "name": "Heardat Appointments",
-    "slug": "Heardat Appointments",
+    "slug": "heardat-appointments-app-cilzca",
     "version": "2.2.3",
     "orientation": "portrait",
     "icon": "./assets/images/Heardat_icon.png",
@@ -25,7 +26,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "heardat.app.ionic"
+      "package": "com.heardat.app"
     },
     "web": {
       "favicon": "./assets/images/Heardat_icon.png",
@@ -34,15 +35,24 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./app.plugin.js",
+      [
+        "react-native-edge-to-edge",
+        {
+          "android": {
+            "enforceNavigationBarContrast": false
+          }
+        }
+      ]
     ],
-    "scheme": "Heardat Appointments",
+    "scheme": "heardat-appointments",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://ah6xbghrnu8mtkscsqwnfchq7r74g6tx.app.specular.dev"
+      "backendUrl": "https://mt2nx2p2qg45rgu2mbbrhzpk8hd3se69.app.specular.dev"
     }
   }
 }
