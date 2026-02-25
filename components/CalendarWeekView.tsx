@@ -17,10 +17,10 @@ interface Appointment {
   ClientName: string;
   UserName: string;
   DateAppointment: string;
-  TimeAppointment: string;
   Duration?: number;
   Status?: string;
   audiologistId?: string;
+  Type: string;
   audiologistName?: string;
 }
 
@@ -129,7 +129,8 @@ export function CalendarWeekView({
   };
 
   const getAppointmentPosition = (appointment: Appointment) => {
-    const time = parseTime(appointment.TimeAppointment);
+        const DateStringToDate = new Date(appointment.DateAppointment);
+    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
     const totalMinutes = time.hour * 60 + time.minute;
     const pixelsPerMinute = SLOT_HEIGHT / 60;
     
@@ -185,8 +186,13 @@ export function CalendarWeekView({
         <View style={[styles.dayHeadersContainer, { backgroundColor: theme.colors.card }]}>
           <View style={{ width: TIME_COLUMN_WIDTH }} />
           {weekDates.map((date, index) => {
-            const dateKey = formatDateKey(date);
-            const dayAppointments = appointments.filter((apt) => apt.DateAppointment === dateKey);
+            const CalDateStringToDate = new Date(date);
+            const dateKey = formatDateKey(CalDateStringToDate);
+            const dayAppointments = appointments.filter((apt) => {
+              const AptDateStringToDate = new Date(apt.DateAppointment);
+              const aptDateKey = formatDateKey(AptDateStringToDate);
+              return aptDateKey === dateKey
+            });
             const isTodayDate = isToday(date);
             const isSelected = dateKey === selectedDate;
 
@@ -304,7 +310,8 @@ export function CalendarWeekView({
                         <React.Fragment key={audiologist.user_id}>
                           {audiologistAppointments.map((appointment) => {
                             const position = getAppointmentPosition(appointment);
-                            const time = parseTime(appointment.TimeAppointment);
+                                const DateStringToDate = new Date(appointment.DateAppointment);
+    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
                             const timeText = `${time.hour % 12 || 12}:${time.minute.toString().padStart(2, '0')}`;
 
                             return (
