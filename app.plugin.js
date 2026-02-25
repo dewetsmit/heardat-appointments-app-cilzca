@@ -1,5 +1,5 @@
 
-const { withAndroidStyles, AndroidConfig } = require('@expo/config-plugins');
+const { withAndroidStyles, withAppBuildGradle } = require('@expo/config-plugins');
 
 /**
  * Expo config plugin to ensure Material Components theme is properly configured
@@ -81,7 +81,32 @@ const withMaterialComponentsTheme = (config) => {
   });
 };
 
+/**
+ * Ensure Material Components dependency is added to build.gradle
+ */
+const withMaterialComponentsDependency = (config) => {
+  return withAppBuildGradle(config, (config) => {
+    const buildGradle = config.modResults.contents;
+    
+    // Check if Material Components dependency is already added
+    if (!buildGradle.includes('com.google.android.material:material:')) {
+      // Add Material Components dependency
+      const dependenciesRegex = /dependencies\s*{/;
+      if (dependenciesRegex.test(buildGradle)) {
+        config.modResults.contents = buildGradle.replace(
+          dependenciesRegex,
+          `dependencies {
+    implementation 'com.google.android.material:material:1.9.0'`
+        );
+      }
+    }
+    
+    return config;
+  });
+};
+
 module.exports = (config) => {
   config = withMaterialComponentsTheme(config);
+  config = withMaterialComponentsDependency(config);
   return config;
 };

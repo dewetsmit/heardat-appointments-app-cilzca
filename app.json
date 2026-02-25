@@ -46,7 +46,7 @@
         }
       ]
     ],
-    "scheme": "heardat-appointments",
+    "scheme": "heardatappointments",
     "experiments": {
       "typedRoutes": true
     },
