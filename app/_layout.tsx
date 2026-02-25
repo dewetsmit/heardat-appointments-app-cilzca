@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect, useCallback } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, Redirect } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -84,8 +84,14 @@ function RootLayoutNav() {
     handleAuthRedirect();
   }, [handleAuthRedirect]);
 
+  // During initial load, redirect immediately to auth screen instead of showing loading
   if (!loaded || loading) {
-    return null;
+    // If fonts aren't loaded yet, return null to show native splash
+    if (!loaded) {
+      return null;
+    }
+    // If fonts are loaded but auth is loading, redirect to auth screen
+    return <Redirect href="/auth" />;
   }
 
   const CustomDefaultTheme: Theme = {
