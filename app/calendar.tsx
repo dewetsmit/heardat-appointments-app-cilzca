@@ -1,7 +1,12 @@
 
-import { AudiologistSelector } from '@/components/AudiologistSelector';
-import { CalendarWeekView } from '@/components/CalendarWeekView';
+import { useAppointments } from '@/contexts/AppointmentContext';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { Calendar } from 'react-native-calendars';
 import { getUserAppointments, formatDateForAPI } from '@/utils/api';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '@react-navigation/native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,19 +17,14 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import SideNav from '@/components/SideNav';
-import { useRouter } from 'expo-router';
-import moment from 'moment';
-import { useTheme } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Calendar } from 'react-native-calendars';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IconSymbol } from '@/components/IconSymbol';
+import { CalendarWeekView } from '@/components/CalendarWeekView';
+import { AudiologistSelector } from '@/components/AudiologistSelector';
+import SideNav from '@/components/SideNav';
 import { CalendarDayView } from '@/components/CalendarDayView';
-import { useAppointments } from '@/contexts/AppointmentContext';
-import { useAuth } from '@/contexts/AuthContext';
+import moment from 'moment';
 
-type ViewMode = 'month' | 'week' | 'day';
+type ViewMode = 'day' | 'week' | 'month';
 
 interface HeardatAppointment {
   AppointmentID: string;
@@ -42,120 +42,250 @@ interface HeardatAppointment {
   audiologistName?: string;
 }
 
+// Helper function to get audiologist color for dots
 const AUDIOLOGIST_COLORS = [
-  '#4A90E2',
-  '#E94B3C',
-  '#6BCF7F',
-  '#F5A623',
-  '#9013FE',
-  '#50E3C2',
-  '#FF6B9D',
-  '#4ECDC4',
+  '#007AFF', '#34C759', '#FF9500', '#FF3B30',
+  '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
 ];
 
 export default function CalendarScreen() {
-  const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
-  const [refreshing, setRefreshing] = useState(false);
-  const [sideNavVisible, setSideNavVisible] = useState(false);
-
   const theme = useTheme();
-  const { appointments, selectedAudiologists, loadAppointments } = useAppointments();
   const router = useRouter();
   const { user } = useAuth();
+  const { selectedAudiologists } = useAppointments();
+
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
+  const [appointments, setAppointments] = useState<HeardatAppointment[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [sideNavVisible, setSideNavVisible] = useState(false);
+
+  const getAudiologistColorForDot = useCallback((audiologistId: string): string => {
+    const index = selectedAudiologists.findIndex((a) => a.user_id === audiologistId);
+    return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
+  }, [selectedAudiologists]);
+
+  const loadAppointments = useCallback(async () => {
+    if (!user || selectedAudiologists.length === 0) {
+      console.log('[Calendar] No user or no audiologists selected, clearing appointments');
+      setAppointments([]);
+      return;
+    }
+
+    console.log('[Calendar] Loading appointments for', selectedAudiologists.length, 'audiologists on date:', selectedDate, 'viewMode:', viewMode);
+    try {
+      setIsLoading(true);
+
+      // Calculate date range based on view mode
+      let startDate = selectedDate;
+      let endDate = selectedDate;
+
+      if (viewMode === 'week') {
+        // Get the week range
+        const date = moment(selectedDate, 'YYYY-MM-DD');
+        startDate = date.clone().startOf('week').format('YYYY-MM-DD');
+        endDate = date.clone().endOf('week').format('YYYY-MM-DD');
+        console.log('[Calendar] Week view - fetching from', startDate, 'to', endDate);
+      } else if (viewMode === 'month') {
+        // Get the month range
+        const date = moment(selectedDate, 'YYYY-MM-DD');
+        startDate = date.clone().startOf('month').format('YYYY-MM-DD');
+        endDate = date.clone().endOf('month').format('YYYY-MM-DD');
+        console.log('[Calendar] Month view - fetching from', startDate, 'to', endDate);
+      } else {
+        console.log('[Calendar] Day view - fetching for', selectedDate);
+      }
+
+      // Fetch appointments for each selected audiologist
+      const allAppointments: HeardatAppointment[] = [];
+
+      for (const audiologist of selectedAudiologists) {
+        console.log('[Calendar] Fetching appointments for audiologist:', audiologist.full_name, 'ID:', audiologist.user_id);
+        
+        try {
+          const searchUser = {
+            CompanyID: user.CompanyID,
+            BranchID: user.BranchID,
+            UserID: audiologist.user_id,
+          };
+
+          const data = await getUserAppointments(startDate, endDate, searchUser);
+          
+          if (data && data.appointments && Array.isArray(data.appointments)) {
+            console.log('[Calendar] Found', data.appointments.length, 'appointments for', audiologist.full_name);
+            
+            // Add audiologist info to each appointment
+            const appointmentsWithAudiologist = data.appointments.map((apt: HeardatAppointment) => ({
+              ...apt,
+              audiologistName: audiologist.full_name,
+              audiologistId: audiologist.user_id,
+            }));
+            
+            allAppointments.push(...appointmentsWithAudiologist);
+          } else {
+            console.log('[Calendar] No appointments found for', audiologist.full_name);
+          }
+        } catch (error) {
+          console.error('[Calendar] Error fetching appointments for audiologist', audiologist.full_name, ':', error);
+        }
+      }
+
+      console.log('[Calendar] Total appointments loaded:', allAppointments.length);
+      setAppointments(allAppointments);
+    } catch (error) {
+      console.error('[Calendar] Failed to load appointments:', error);
+      setAppointments([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedDate, user, selectedAudiologists, viewMode]);
 
   useEffect(() => {
-    console.log('CalendarScreen mounted, loading appointments');
     loadAppointments();
   }, [loadAppointments]);
 
-  const markedDates = useMemo(() => {
-    const marked: { [key: string]: any } = {};
-    appointments.forEach((apt) => {
-      const date = apt.DateAppointment;
-      if (!marked[date]) {
-        marked[date] = { marked: true, dots: [] };
-      }
-    });
-    marked[selectedDate] = {
-      ...marked[selectedDate],
-      selected: true,
-      selectedColor: theme.colors.primary,
-    };
-    return marked;
-  }, [appointments, selectedDate, theme.colors.primary]);
-
-  const handleRefresh = useCallback(async () => {
-    console.log('User initiated refresh');
-    setRefreshing(true);
+  const handleRefresh = async () => {
+    console.log('[Calendar] User triggered refresh');
+    setIsRefreshing(true);
     await loadAppointments();
-    setRefreshing(false);
-  }, [loadAppointments]);
+    setIsRefreshing(false);
+  };
 
   function formatTime(timeString: string): string {
-    const [hours, minutes] = timeString.split(':');
-    const hour = parseInt(hours, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+    if (!timeString) {
+      return '';
+    }
+
+    try {
+      const parts = timeString.split(':');
+      if (parts.length >= 2) {
+        const hours = parseInt(parts[0], 10);
+        const minutes = parts[1];
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${minutes} ${ampm}`;
+      }
+    } catch (err) {
+      console.error('[Calendar] Error formatting time:', err);
+    }
+
+    return timeString;
   }
 
   function onDayPress(day: any) {
-    console.log('Day pressed:', day.dateString);
+    console.log('[Calendar] Day pressed:', day.dateString);
     setSelectedDate(day.dateString);
     setViewMode('day');
   }
 
   function handleDayPressFromWeek(date: string) {
-    console.log('Day pressed from week view:', date);
+    console.log('[Calendar] Day pressed from week view:', date);
     setSelectedDate(date);
     setViewMode('day');
   }
 
-  function navigatePrevious() {
+  // Navigate to previous/next day, week, or month
+  const navigatePrevious = () => {
+    const currentMoment = moment(selectedDate, 'YYYY-MM-DD');
     let newDate;
-    if (viewMode === 'day') {
-      newDate = moment(selectedDate).subtract(1, 'day').format('YYYY-MM-DD');
-    } else if (viewMode === 'week') {
-      newDate = moment(selectedDate).subtract(1, 'week').format('YYYY-MM-DD');
-    } else {
-      newDate = moment(selectedDate).subtract(1, 'month').format('YYYY-MM-DD');
-    }
-    console.log('Navigating to previous:', newDate);
-    setSelectedDate(newDate);
-  }
 
-  function navigateNext() {
+    if (viewMode === 'day') {
+      newDate = currentMoment.subtract(1, 'day');
+    } else if (viewMode === 'week') {
+      newDate = currentMoment.subtract(1, 'week');
+    } else {
+      newDate = currentMoment.subtract(1, 'month');
+    }
+
+    setSelectedDate(newDate.format('YYYY-MM-DD'));
+    console.log('[Calendar] Navigated to previous:', newDate.format('YYYY-MM-DD'));
+  };
+
+  const navigateNext = () => {
+    const currentMoment = moment(selectedDate, 'YYYY-MM-DD');
     let newDate;
-    if (viewMode === 'day') {
-      newDate = moment(selectedDate).add(1, 'day').format('YYYY-MM-DD');
-    } else if (viewMode === 'week') {
-      newDate = moment(selectedDate).add(1, 'week').format('YYYY-MM-DD');
-    } else {
-      newDate = moment(selectedDate).add(1, 'month').format('YYYY-MM-DD');
-    }
-    console.log('Navigating to next:', newDate);
-    setSelectedDate(newDate);
-  }
 
-  const selectedDateDisplay = moment(selectedDate).format('MMMM D, YYYY');
-  const todayText = 'Today';
+    if (viewMode === 'day') {
+      newDate = currentMoment.add(1, 'day');
+    } else if (viewMode === 'week') {
+      newDate = currentMoment.add(1, 'week');
+    } else {
+      newDate = currentMoment.add(1, 'month');
+    }
+
+    setSelectedDate(newDate.format('YYYY-MM-DD'));
+    console.log('[Calendar] Navigated to next:', newDate.format('YYYY-MM-DD'));
+  };
+
+  // Build marked dates for month view with colored dots - FIXED with useMemo
+  const markedDates = useMemo(() => {
+    const marks: any = {};
+    
+    appointments.forEach((apt) => {
+      // Format the date key properly from ISO timestamp
+      const dateKey = moment(apt.DateAppointment).format('YYYY-MM-DD');
+      
+      if (dateKey) {
+        // If date already has appointments, add to the dots array
+        if (marks[dateKey]) {
+          // Check if we already have a dot for this audiologist
+          const existingDot = marks[dateKey].dots?.find((dot: any) => dot.key === apt.audiologistId);
+          if (!existingDot && marks[dateKey].dots) {
+            marks[dateKey].dots.push({
+              key: apt.audiologistId,
+              color: getAudiologistColorForDot(apt.audiologistId || ''),
+            });
+          }
+        } else {
+          // First appointment for this date
+          marks[dateKey] = {
+            marked: true,
+            dots: [{
+              key: apt.audiologistId,
+              color: getAudiologistColorForDot(apt.audiologistId || ''),
+            }],
+          };
+        }
+      }
+    });
+
+    // Add selected date styling
+    marks[selectedDate] = {
+      ...marks[selectedDate],
+      selected: true,
+      selectedColor: theme.colors.primary,
+    };
+
+    return marks;
+  }, [appointments, selectedDate, theme.colors.primary, getAudiologistColorForDot]);
+
+  // Filter appointments for selected date (for month view)
+  const selectedDateAppointments = useMemo(() => {
+    return appointments.filter((apt) => {
+      const aptDate = moment(apt.DateAppointment).format('YYYY-MM-DD');
+      return aptDate === selectedDate;
+    });
+  }, [appointments, selectedDate]);
+
+  const noAudiologistsSelectedText = 'No audiologists selected';
+  const selectAudiologistsText = 'Please select audiologists from the dropdown above';
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
+      <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
         <TouchableOpacity
-          style={[styles.menuButton, { backgroundColor: `${theme.colors.primary}20` }]}
-          onPress={() => {
-            console.log('Menu button pressed');
-            setSideNavVisible(true);
-          }}
+          style={styles.menuButton}
+          onPress={() => setSideNavVisible(true)}
         >
           <IconSymbol
             ios_icon_name="line.3.horizontal"
             android_material_icon_name="menu"
-            size={24}
-            color={theme.colors.primary}
+            size={28}
+            color={theme.colors.text}
           />
         </TouchableOpacity>
 
@@ -163,199 +293,218 @@ export default function CalendarScreen() {
           Calendar
         </Text>
 
+        <AudiologistSelector />
+      </View>
+
+      <View style={styles.viewModeSelector}>
         <TouchableOpacity
-          style={[styles.profileButton, { backgroundColor: `${theme.colors.primary}20` }]}
-          onPress={() => {
-            console.log('Profile button pressed');
-            router.push('/profile');
-          }}
+          style={[
+            styles.viewModeButton,
+            viewMode === 'day' && { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={() => setViewMode('day')}
         >
-          <IconSymbol
-            ios_icon_name="person.fill"
-            android_material_icon_name="person"
-            size={24}
-            color={theme.colors.primary}
-          />
+          <Text
+            style={[
+              styles.viewModeText,
+              { color: viewMode === 'day' ? '#FFFFFF' : theme.colors.text },
+            ]}
+          >
+            Day
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.viewModeButton,
+            viewMode === 'week' && { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={() => setViewMode('week')}
+        >
+          <Text
+            style={[
+              styles.viewModeText,
+              { color: viewMode === 'week' ? '#FFFFFF' : theme.colors.text },
+            ]}
+          >
+            Week
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.viewModeButton,
+            viewMode === 'month' && { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={() => setViewMode('month')}
+        >
+          <Text
+            style={[
+              styles.viewModeText,
+              { color: viewMode === 'month' ? '#FFFFFF' : theme.colors.text },
+            ]}
+          >
+            Month
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
-        <AudiologistSelector />
-
-        <View style={styles.viewModeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.viewModeButton,
-              viewMode === 'month' && { backgroundColor: theme.colors.primary },
-              { borderColor: theme.colors.border },
-            ]}
-            onPress={() => {
-              console.log('Switching to month view');
-              setViewMode('month');
-            }}
-          >
-            <Text
-              style={[
-                styles.viewModeText,
-                { color: viewMode === 'month' ? '#FFFFFF' : theme.colors.text },
-              ]}
-            >
-              Month
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.viewModeButton,
-              viewMode === 'week' && { backgroundColor: theme.colors.primary },
-              { borderColor: theme.colors.border },
-            ]}
-            onPress={() => {
-              console.log('Switching to week view');
-              setViewMode('week');
-            }}
-          >
-            <Text
-              style={[
-                styles.viewModeText,
-                { color: viewMode === 'week' ? '#FFFFFF' : theme.colors.text },
-              ]}
-            >
-              Week
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.viewModeButton,
-              viewMode === 'day' && { backgroundColor: theme.colors.primary },
-              { borderColor: theme.colors.border },
-            ]}
-            onPress={() => {
-              console.log('Switching to day view');
-              setViewMode('day');
-            }}
-          >
-            <Text
-              style={[
-                styles.viewModeText,
-                { color: viewMode === 'day' ? '#FFFFFF' : theme.colors.text },
-              ]}
-            >
-              Day
-            </Text>
-          </TouchableOpacity>
+      {selectedAudiologists.length === 0 ? (
+        <View style={styles.emptyStateContainer}>
+          <IconSymbol
+            ios_icon_name="person.3.fill"
+            android_material_icon_name="group"
+            size={64}
+            color={theme.dark ? '#666' : '#999'}
+          />
+          <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>
+            {noAudiologistsSelectedText}
+          </Text>
+          <Text style={[styles.emptyStateText, { color: theme.dark ? '#666' : '#999' }]}>
+            {selectAudiologistsText}
+          </Text>
         </View>
-
-        <View style={styles.navigationContainer}>
-          <TouchableOpacity
-            style={[styles.navButton, { backgroundColor: theme.colors.card }]}
-            onPress={navigatePrevious}
-          >
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="chevron-left"
-              size={24}
-              color={theme.colors.text}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.dateDisplay}>
-            <Text style={[styles.dateText, { color: theme.colors.text }]}>
-              {selectedDateDisplay}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.navButton, { backgroundColor: theme.colors.card }]}
-            onPress={navigateNext}
-          >
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="chevron-right"
-              size={24}
-              color={theme.colors.text}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.todayButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => {
-              const today = moment().format('YYYY-MM-DD');
-              console.log('Navigating to today:', today);
-              setSelectedDate(today);
-            }}
-          >
-            <Text style={styles.todayButtonText}>
-              {todayText}
-            </Text>
-          </TouchableOpacity>
+      ) : isLoading && !isRefreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
+      ) : (
+        <ScrollView
+          style={styles.container}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.primary}
+            />
+          }
+        >
+          {viewMode === 'day' && (
+            <CalendarDayView
+              selectedDate={selectedDate}
+              appointments={appointments}
+              selectedAudiologists={selectedAudiologists}
+              onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
+              onSwipeLeft={navigateNext}
+              onSwipeRight={navigatePrevious}
+            />
+          )}
 
-        {viewMode === 'month' && (
-          <Calendar
-            current={selectedDate}
-            onDayPress={onDayPress}
-            markedDates={markedDates}
-            theme={{
-              backgroundColor: theme.colors.background,
-              calendarBackground: theme.colors.card,
-              textSectionTitleColor: theme.colors.text,
-              selectedDayBackgroundColor: theme.colors.primary,
-              selectedDayTextColor: '#ffffff',
-              todayTextColor: theme.colors.primary,
-              dayTextColor: theme.colors.text,
-              textDisabledColor: theme.dark ? '#444' : '#d9e1e8',
-              dotColor: theme.colors.primary,
-              selectedDotColor: '#ffffff',
-              arrowColor: theme.colors.primary,
-              monthTextColor: theme.colors.text,
-              indicatorColor: theme.colors.primary,
-            }}
-            style={[styles.calendar, { backgroundColor: theme.colors.card }]}
-          />
-        )}
+          {viewMode === 'week' && (
+            <CalendarWeekView
+              selectedDate={selectedDate}
+              appointments={appointments}
+              selectedAudiologists={selectedAudiologists}
+              onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
+              onDayPress={handleDayPressFromWeek}
+              onSwipeLeft={navigateNext}
+              onSwipeRight={navigatePrevious}
+            />
+          )}
 
-        {viewMode === 'week' && (
-          <CalendarWeekView
-            selectedDate={selectedDate}
-            appointments={appointments}
-            selectedAudiologists={selectedAudiologists}
-            onDayPress={handleDayPressFromWeek}
-            onSwipeLeft={navigateNext}
-            onSwipeRight={navigatePrevious}
-          />
-        )}
+          {viewMode === 'month' && (
+            <View style={styles.monthViewContainer}>
+              <Calendar
+                current={selectedDate}
+                onDayPress={onDayPress}
+                markedDates={markedDates}
+                markingType="multi-dot"
+                theme={{
+                  backgroundColor: theme.colors.background,
+                  calendarBackground: theme.colors.card,
+                  textSectionTitleColor: theme.colors.text,
+                  selectedDayBackgroundColor: theme.colors.primary,
+                  selectedDayTextColor: '#ffffff',
+                  todayTextColor: theme.colors.primary,
+                  dayTextColor: theme.colors.text,
+                  textDisabledColor: theme.dark ? '#666' : '#d9e1e8',
+                  dotColor: theme.colors.primary,
+                  selectedDotColor: '#ffffff',
+                  arrowColor: theme.colors.primary,
+                  monthTextColor: theme.colors.text,
+                  textDayFontWeight: '400',
+                  textMonthFontWeight: 'bold',
+                  textDayHeaderFontWeight: '600',
+                }}
+                onPressArrowLeft={(subtractMonth) => {
+                  subtractMonth();
+                  navigatePrevious();
+                }}
+                onPressArrowRight={(addMonth) => {
+                  addMonth();
+                  navigateNext();
+                }}
+              />
 
-        {viewMode === 'day' && (
-          <CalendarDayView
-            selectedDate={selectedDate}
-            appointments={appointments}
-            selectedAudiologists={selectedAudiologists}
-            onSwipeLeft={navigateNext}
-            onSwipeRight={navigatePrevious}
-          />
-        )}
-      </ScrollView>
+              <View style={styles.appointmentsList}>
+                <Text style={[styles.appointmentsTitle, { color: theme.colors.text }]}>
+                  Appointments for {selectedDate}
+                </Text>
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => {
-          console.log('Create appointment button pressed');
-          router.push('/create-appointment');
-        }}
-      >
-        <IconSymbol
-          ios_icon_name="plus"
-          android_material_icon_name="add"
-          size={28}
-          color="#FFFFFF"
-        />
-      </TouchableOpacity>
+                {selectedDateAppointments.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <IconSymbol
+                      ios_icon_name="calendar.badge.exclamationmark"
+                      android_material_icon_name="event-busy"
+                      size={48}
+                      color={theme.dark ? '#666' : '#999'}
+                    />
+                    <Text style={[styles.emptyText, { color: theme.dark ? '#666' : '#999' }]}>
+                      No appointments scheduled
+                    </Text>
+                  </View>
+                ) : (
+                  selectedDateAppointments.map((apt) => {
+                    const timeText = formatTime(apt.TimeAppointment);
+
+                    return (
+                      <View
+                        key={apt.AppointmentID}
+                        style={[styles.appointmentCard, { backgroundColor: theme.colors.card }]}
+                      >
+                        <View style={styles.appointmentHeader}>
+                          <Text style={[styles.appointmentTime, { color: theme.colors.primary }]}>
+                            {timeText}
+                          </Text>
+                          {apt.Duration && (
+                            <Text style={[styles.appointmentDuration, { color: theme.dark ? '#98989D' : '#666' }]}>
+                              {apt.Duration}
+                            </Text>
+                          )}
+                        </View>
+
+                        <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
+                          {apt.ClientName}
+                        </Text>
+
+                        {apt.audiologistName && (
+                          <View style={styles.appointmentDetail}>
+                            <IconSymbol
+                              ios_icon_name="person.fill"
+                              android_material_icon_name="person"
+                              size={14}
+                              color={theme.dark ? '#98989D' : '#666'}
+                            />
+                            <Text style={[styles.appointmentDetailText, { color: theme.dark ? '#98989D' : '#666' }]}>
+                              {apt.audiologistName}
+                            </Text>
+                          </View>
+                        )}
+
+                        {apt.Notes && (
+                          <Text style={[styles.appointmentNotes, { color: theme.dark ? '#98989D' : '#666' }]}>
+                            {apt.Notes}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      )}
 
       <SideNav visible={sideNavVisible} onClose={() => setSideNavVisible(false)} />
     </SafeAreaView>
@@ -371,98 +520,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  container: {
     flex: 1,
+    marginLeft: 12,
   },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
-    gap: 20,
-  },
-  viewModeContainer: {
+  viewModeSelector: {
     flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     gap: 8,
   },
   viewModeButton: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   viewModeText: {
     fontSize: 14,
     fontWeight: '600',
   },
-  navigationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  container: {
+    flex: 1,
   },
-  navButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dateDisplay: {
+  emptyStateContainer: {
     flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 40,
+    gap: 16,
   },
-  dateText: {
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  emptyStateText: {
     fontSize: 16,
-    fontWeight: '600',
+    textAlign: 'center',
   },
-  todayButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  monthViewContainer: {
+    padding: 16,
   },
-  todayButtonText: {
-    color: '#FFFFFF',
+  appointmentsList: {
+    marginTop: 24,
+    gap: 12,
+  },
+  appointmentsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 16,
+  },
+  appointmentCard: {
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  appointmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  appointmentTime: {
     fontSize: 14,
     fontWeight: '600',
   },
-  calendar: {
-    borderRadius: 12,
-    padding: 10,
+  appointmentDuration: {
+    fontSize: 12,
   },
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
+  appointmentClient: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  appointmentDetail: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    gap: 6,
+    marginTop: 4,
+  },
+  appointmentDetailText: {
+    fontSize: 14,
+  },
+  appointmentNotes: {
+    fontSize: 14,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

@@ -29,6 +29,8 @@ interface Appointment {
   audiologistId?: string;
   Type: string;
   audiologistName?: string;
+  FirstName?:string;
+  LastName?:string;
 }
 
 interface CalendarDayViewProps {
@@ -390,6 +392,7 @@ export function CalendarDayView({
 
                       {/* Appointments */}
                       {audiologistAppointments.map((appointment) => {
+                        console.log('[APPOINTMENT]', appointment)
                         const position = getAppointmentPosition(appointment);
                         const DateStringToDate = new Date(appointment.DateAppointment);
                         const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
@@ -412,8 +415,11 @@ export function CalendarDayView({
                             <Text style={styles.appointmentTime} numberOfLines={1}>
                               {timeText}
                             </Text>
-                            <Text style={styles.appointmentClient} numberOfLines={2}>
+                            {/* <Text style={styles.appointmentClient} numberOfLines={2}>
                               {appointment.Type}
+                            </Text> */}
+                            <Text style={styles.appointmentClient} numberOfLines={1}>
+                              {appointment.FirstName}
                             </Text>
                           </TouchableOpacity>
                         );
