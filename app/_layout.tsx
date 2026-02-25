@@ -23,7 +23,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  initialRouteName: "calendar",
 };
 
 function RootLayoutNav() {
@@ -73,7 +73,7 @@ function RootLayoutNav() {
       console.log('User authenticated, allowing navigation');
     } else if (user && inAuthGroup) {
       console.log('User authenticated, redirecting to calendar');
-      router.replace('/(tabs)/calendar');
+      router.replace('/calendar');
     } else if (!user && !inAuthGroup) {
       console.log('User not authenticated, redirecting to auth');
       router.replace('/auth');
@@ -132,7 +132,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
                 <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
                 <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="calendar" options={{ headerShown: false }} />
+                <Stack.Screen name="profile" options={{ headerShown: false }} />
                 <Stack.Screen 
                   name="create-appointment" 
                   options={{ 
