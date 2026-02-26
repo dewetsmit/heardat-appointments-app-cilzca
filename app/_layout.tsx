@@ -1,8 +1,8 @@
 
 import "react-native-reanimated";
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments, Redirect } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -56,30 +56,34 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  const handleAuthRedirect = useCallback(() => {
+  // Handle authentication-based routing
+  useEffect(() => {
     if (loading || !loaded) {
-      console.log('Auth loading or fonts loading...');
+      console.log('Auth or fonts still loading...');
       return;
     }
 
     const inAuthGroup = segments[0] === 'auth' || segments[0] === 'auth-popup' || segments[0] === 'auth-callback';
 
-    console.log('Auth state changed:', { user: !!user, inAuthGroup, segments });
+    console.log('Auth state:', { 
+      hasUser: !!user, 
+      inAuthGroup, 
+      currentPath: segments.join('/') 
+    });
 
-    if (user && !inAuthGroup) {
-      console.log('User authenticated, allowing navigation');
-    } else if (user && inAuthGroup) {
-      console.log('User authenticated, redirecting to calendar');
-      router.replace('/calendar');
-    } else if (!user && !inAuthGroup) {
-      console.log('User not authenticated, redirecting to auth');
+    if (!user && !inAuthGroup) {
+      // User is not authenticated and not on auth pages - redirect to auth
+      console.log('User not authenticated, redirecting to /auth');
       router.replace('/auth');
+    } else if (user && inAuthGroup) {
+      // User is authenticated but still on auth pages - redirect to calendar
+      console.log('User authenticated, redirecting to /calendar');
+      router.replace('/calendar');
+    } else if (user) {
+      // User is authenticated and on a valid page
+      console.log('User authenticated, allowing navigation to:', segments.join('/'));
     }
   }, [user, segments, loading, loaded, router]);
-
-  useEffect(() => {
-    handleAuthRedirect();
-  }, [handleAuthRedirect]);
 
 
   const CustomDefaultTheme: Theme = {

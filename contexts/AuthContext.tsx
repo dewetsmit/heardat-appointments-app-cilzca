@@ -91,13 +91,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedUserData = await storage.getItem("CurrentUser");
       
       if (storedSessionKey && storedUserKey && storedUserData) {
-        console.log('Found stored session, restoring user...');
-        const userData = JSON.parse(storedUserData);
-        setUser(userData);
-        setSessionKey(storedSessionKey);
-        setUserKey(storedUserKey);
-        setToken(storedSessionKey); // Use session key as token
-        console.log('User session restored:', userData.full_name || userData.name);
+        console.log('Found stored session, verifying with API...');
+        
+        // Verify session is still valid by making a test API call
+        try {
+          const userData = JSON.parse(storedUserData);
+          const today = new Date();
+          const todayStr = formatDateForAPI(today);
+          
+          // Try to fetch appointments to verify session is valid
+          const params = new URLSearchParams({
+            UserID: userData.UserID || '',
+            Key: storedUserKey,
+            Userkey: storedUserKey,
+            Companykey: userData.CompanyKey || '',
+            Sessionkey: storedSessionKey,
+            DateFrom: todayStr,
+            DateTo: todayStr,
+          });
+          
+          const appointmentsUrl = `${HEARDAT_API_URL}/Appointments?${params.toString()}`;
+          const response = await fetch(appointmentsUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
+          
+          if (!response.ok) {
+            console.log('Session verification failed - API returned error:', response.status);
+            throw new Error('Session expired');
+          }
+          
+          const responseText = await response.text();
+          const parsedResponse = JSON.parse(JSON.parse(responseText).toString());
+          
+          // Check if the response indicates an expired session
+          if (parsedResponse.Error && parsedResponse.Error.toLowerCase().includes('session')) {
+            console.log('Session expired - API returned session error:', parsedResponse.Error);
+            throw new Error('Session expired');
+          }
+          
+          // Session is valid, restore user
+          console.log('Session verified successfully');
+          setUser(userData);
+          setSessionKey(storedSessionKey);
+          setUserKey(storedUserKey);
+          setToken(storedSessionKey);
+          console.log('User session restored:', userData.full_name || userData.name);
+        } catch (verifyError) {
+          console.log('Session verification failed:', verifyError);
+          // Clear expired session
+          await storage.deleteItem("session_key");
+          await storage.deleteItem("UserKey");
+          await storage.deleteItem("Username");
+          await storage.deleteItem("Password");
+          await storage.deleteItem("CurrentUser");
+          
+          setUser(null);
+          setToken(null);
+          setSessionKey(null);
+          setUserKey(null);
+        }
       } else {
         console.log('No active session found');
         setUser(null);
