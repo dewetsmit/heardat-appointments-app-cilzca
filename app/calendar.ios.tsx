@@ -151,6 +151,16 @@ export default function CalendarScreen() {
     setIsRefreshing(false);
   };
 
+  const handleAppointmentPress = (appointment: any) => {
+    console.log('[Calendar] Appointment pressed:', appointment.AppointmentID);
+    router.push({
+      pathname: '/appointment-detail',
+      params: {
+        appointmentId: appointment.AppointmentID,
+      },
+    });
+  };
+
   function formatTime(timeString: string): string {
     if (!timeString) {
       return '';
@@ -383,7 +393,7 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               appointments={appointments}
               selectedAudiologists={selectedAudiologists}
-              onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
+              onAppointmentPress={handleAppointmentPress}
               onSwipeLeft={navigateNext}
               onSwipeRight={navigatePrevious}
             />
@@ -394,7 +404,7 @@ export default function CalendarScreen() {
               selectedDate={selectedDate}
               appointments={appointments}
               selectedAudiologists={selectedAudiologists}
-              onAppointmentPress={(apt) => console.log('[Calendar] Appointment pressed:', apt)}
+              onAppointmentPress={handleAppointmentPress}
               onDayPress={handleDayPressFromWeek}
               onSwipeLeft={navigateNext}
               onSwipeRight={navigatePrevious}
@@ -457,9 +467,11 @@ export default function CalendarScreen() {
                     const timeText = formatTime(apt.TimeAppointment);
 
                     return (
-                      <View
+                      <TouchableOpacity
                         key={apt.AppointmentID}
                         style={[styles.appointmentCard, { backgroundColor: theme.colors.card }]}
+                        onPress={() => handleAppointmentPress(apt)}
+                        activeOpacity={0.7}
                       >
                         <View style={styles.appointmentHeader}>
                           <Text style={[styles.appointmentTime, { color: theme.colors.primary }]}>
@@ -495,7 +507,7 @@ export default function CalendarScreen() {
                             {apt.Notes}
                           </Text>
                         )}
-                      </View>
+                      </TouchableOpacity>
                     );
                   })
                 )}

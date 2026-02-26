@@ -130,6 +130,13 @@ function RootLayoutNav() {
                   }} 
                 />
                 <Stack.Screen 
+                  name="appointment-detail" 
+                  options={{ 
+                    presentation: 'modal',
+                    title: 'Appointment Details',
+                  }} 
+                />
+                <Stack.Screen 
                   name="new-client" 
                   options={{ 
                     presentation: 'modal',
