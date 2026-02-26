@@ -1,7 +1,8 @@
+
 {
   "expo": {
     "name": "Heardat Appointments",
-    "slug": "heardatappointments",
+    "slug": "heardat-appointments-app-cilzca",
     "version": "2.2.3",
     "orientation": "portrait",
     "icon": "./assets/images/Heardat_icon.png",
@@ -24,7 +25,6 @@
         "foregroundImage": "./assets/images/Heardat_icon.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.heardat.app"
     },
     "web": {
@@ -34,16 +34,7 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser",
-      "./app.plugin.js",
-      [
-        "react-native-edge-to-edge",
-        {
-          "android": {
-            "enforceNavigationBarContrast": false
-          }
-        }
-      ]
+      "expo-web-browser"
     ],
     "scheme": "heardatappointments",
     "experiments": {

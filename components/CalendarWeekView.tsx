@@ -337,6 +337,7 @@ export function CalendarWeekView({
           ref={scrollViewRef}
           style={styles.scrollView}
           showsVerticalScrollIndicator={true}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: 100 }}
         >
           <View style={styles.timelineContainer}>

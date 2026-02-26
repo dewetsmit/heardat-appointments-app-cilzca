@@ -91,7 +91,7 @@ export function CalendarDayView({
   onSwipeRight 
 }: CalendarDayViewProps) {
   const theme = useTheme();
-  const [slotHeight, setSlotHeight] = useState(DEFAULT_SLOT_HEIGHT);
+  const [slotHeight, setSlotHeight] = useState(60);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -117,13 +117,7 @@ export function CalendarDayView({
   // Generate time slots based on current zoom level (6am to 7pm)
   const generateTimeSlots = () => {
     const slots = [];
-    let interval = 30;
-    
-    if (slotHeight <= MIN_SLOT_HEIGHT) {
-      interval = 60;
-    } else if (slotHeight >= MAX_SLOT_HEIGHT) {
-      interval = 15;
-    }
+    const interval = 60;
 
     for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
       for (let minute = 0; minute < 60; minute += interval) {
@@ -162,7 +156,7 @@ export function CalendarDayView({
     
     // Calculate minutes from START_HOUR (6am)
     const totalMinutesFromStart = (time.hour - START_HOUR) * 60 + time.minute;
-    const minutesPerSlot = slotHeight <= MIN_SLOT_HEIGHT ? 60 : slotHeight >= MAX_SLOT_HEIGHT ? 15 : 30;
+    const minutesPerSlot = 60;
     const pixelsPerMinute = slotHeight / minutesPerSlot;
     
     const top = totalMinutesFromStart * pixelsPerMinute;
@@ -204,7 +198,7 @@ export function CalendarDayView({
   
   // Calculate current time position relative to START_HOUR
   const currentMinutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-  const currentTimePosition = currentMinutesFromStart * (slotHeight / (slotHeight <= MIN_SLOT_HEIGHT ? 60 : slotHeight >= MAX_SLOT_HEIGHT ? 15 : 30));
+  const currentTimePosition = currentMinutesFromStart * (slotHeight / 60);
 
   const isToday = new Date(selectedDate).toDateString() === new Date().toDateString();
   const showCurrentTimeIndicator = isToday && currentHour >= START_HOUR && currentHour <= END_HOUR;
@@ -216,7 +210,7 @@ export function CalendarDayView({
     year: 'numeric',
   });
 
-  const intervalText = slotHeight <= MIN_SLOT_HEIGHT ? '60 min' : slotHeight >= MAX_SLOT_HEIGHT ? '15 min' : '30 min';
+  const intervalText = '60 min';
 
   // Calculate column width based on number of audiologists
   const numAudiologists = selectedAudiologists.length;
@@ -347,6 +341,7 @@ export function CalendarDayView({
             ref={scrollViewRef}
             style={styles.scrollView}
             showsVerticalScrollIndicator={true}
+            scrollEventThrottle={16}
             contentContainerStyle={{ paddingBottom: 100 }}
           >
             <View style={styles.timelineContainer}>
@@ -392,7 +387,7 @@ export function CalendarDayView({
 
                       {/* Appointments */}
                       {audiologistAppointments.map((appointment) => {
-                        console.log('[APPOINTMENT]', appointment)
+                        console.log('[APPOINTMENT]', appointment);
                         const position = getAppointmentPosition(appointment);
                         const DateStringToDate = new Date(appointment.DateAppointment);
                         const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
@@ -415,9 +410,6 @@ export function CalendarDayView({
                             <Text style={styles.appointmentTime} numberOfLines={1}>
                               {timeText}
                             </Text>
-                            {/* <Text style={styles.appointmentClient} numberOfLines={2}>
-                              {appointment.Type}
-                            </Text> */}
                             <Text style={styles.appointmentClient} numberOfLines={1}>
                               {appointment.FirstName}
                             </Text>
