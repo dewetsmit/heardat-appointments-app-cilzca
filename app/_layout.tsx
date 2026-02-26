@@ -81,12 +81,6 @@ function RootLayoutNav() {
     handleAuthRedirect();
   }, [handleAuthRedirect]);
 
-  if (!loaded || loading) {
-    if (!loaded) {
-      return null;
-    }
-    return <Redirect href="/auth" />;
-  }
 
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
