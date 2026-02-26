@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "Heardat Appointments",
@@ -36,7 +35,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "heardatappointments",
+    "scheme": "Heardat Appointments",
     "experiments": {
       "typedRoutes": true
     },
