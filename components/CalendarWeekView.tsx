@@ -8,6 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { Audiologist } from '@/types';
@@ -84,6 +85,7 @@ export function CalendarWeekView({
 }: CalendarWeekViewProps) {
   const theme = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
+  const [legendModalVisible, setLegendModalVisible] = useState(false);
 
   // Separate full-day events from regular appointments
   const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
@@ -216,6 +218,18 @@ export function CalendarWeekView({
     return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
   };
 
+  // Calculate total appointments per audiologist for legend
+  const appointmentCountsByAudiologist: { [audiologistId: string]: number } = {};
+  selectedAudiologists.forEach((audiologist) => {
+    let count = 0;
+    weekDates.forEach((date) => {
+      const dateKey = formatDateKey(date);
+      const dayAppointments = appointmentsByDateAndAudiologist[dateKey]?.[audiologist.user_id] || [];
+      count += dayAppointments.length;
+    });
+    appointmentCountsByAudiologist[audiologist.user_id] = count;
+  });
+
   return (
     <GestureDetector gesture={swipeGesture}>
       <View style={styles.container}>
@@ -223,6 +237,21 @@ export function CalendarWeekView({
           <Text style={[styles.weekText, { color: theme.colors.text }]}>
             {weekDisplay}
           </Text>
+          <TouchableOpacity
+            style={[styles.legendButton, { backgroundColor: `${theme.colors.primary}20` }]}
+            onPress={() => {
+              console.log('[CalendarWeekView] Legend button tapped');
+              setLegendModalVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="info.circle"
+              android_material_icon_name="info"
+              size={20}
+              color={theme.colors.primary}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Day headers */}
@@ -435,9 +464,62 @@ export function CalendarWeekView({
 
         <View style={[styles.footer, { backgroundColor: theme.colors.card }]}>
           <Text style={[styles.footerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-            Swipe to navigate • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''} this week
+            Swipe to navigate • Tap info for legend • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''} this week
           </Text>
         </View>
+
+        {/* Legend Modal */}
+        <Modal
+          visible={legendModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLegendModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.legendModalOverlay}
+            activeOpacity={1}
+            onPress={() => setLegendModalVisible(false)}
+          >
+            <View style={[styles.legendModalContent, { backgroundColor: theme.colors.card }]}>
+              <View style={styles.legendModalHeader}>
+                <Text style={[styles.legendModalTitle, { color: theme.colors.text }]}>
+                  Audiologist Legend
+                </Text>
+                <TouchableOpacity
+                  style={[styles.legendCloseButton, { backgroundColor: `${theme.colors.primary}20` }]}
+                  onPress={() => setLegendModalVisible(false)}
+                >
+                  <IconSymbol
+                    ios_icon_name="xmark"
+                    android_material_icon_name="close"
+                    size={20}
+                    color={theme.colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.legendList}>
+                {selectedAudiologists.map((audiologist, index) => {
+                  const color = getAudiologistColor(audiologist.user_id);
+                  const appointmentCount = appointmentCountsByAudiologist[audiologist.user_id] || 0;
+
+                  return (
+                    <View key={audiologist.user_id} style={styles.legendItem}>
+                      <View style={[styles.legendColorBox, { backgroundColor: color }]} />
+                      <View style={styles.legendTextContainer}>
+                        <Text style={[styles.legendName, { color: theme.colors.text }]}>
+                          {audiologist.full_name}
+                        </Text>
+                        <Text style={[styles.legendCount, { color: theme.dark ? '#98989D' : '#666' }]}>
+                          {appointmentCount} appointment{appointmentCount !== 1 ? 's' : ''} this week
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </GestureDetector>
   );
@@ -452,11 +534,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   weekText: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
     textAlign: 'center',
+  },
+  legendButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   dayHeadersContainer: {
     flexDirection: 'row',
@@ -602,5 +695,69 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
+  },
+  legendModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  legendModalContent: {
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  legendModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  legendModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  legendCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legendList: {
+    maxHeight: 400,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  legendColorBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  legendTextContainer: {
+    flex: 1,
+  },
+  legendName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  legendCount: {
+    fontSize: 13,
   },
 });

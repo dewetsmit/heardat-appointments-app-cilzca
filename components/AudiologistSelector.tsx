@@ -36,7 +36,6 @@ export function AudiologistSelector() {
       setIsLoading(true);
       const credentials = await getHeardatCredentials();
       const data = await getUsers();
-      // const data = await heardatApiCall('AppointmentUsers', params);
       console.log('[AudiologistSelector] Audiologists API raw response:', data);
 
       // Parse the response if it's a string
@@ -60,7 +59,7 @@ export function AudiologistSelector() {
         console.log('[AudiologistSelector] Audiologists loaded:', mappedAudiologists.length);
         setAudiologists(mappedAudiologists);
         
-        // Initialize selectedAudiologists if empty
+        // Only initialize selectedAudiologists if empty (on first load)
         if (!selectedAudiologists || selectedAudiologists.length === 0) {
           console.log('[AudiologistSelector] Initializing selectedAudiologists with all audiologists');
           setSelectedAudiologists(mappedAudiologists);
@@ -79,6 +78,7 @@ export function AudiologistSelector() {
         console.log('[AudiologistSelector] Audiologists loaded:', mappedAudiologists.length);
         setAudiologists(mappedAudiologists);
         
+        // Only initialize selectedAudiologists if empty (on first load)
         if (!selectedAudiologists || selectedAudiologists.length === 0) {
           console.log('[AudiologistSelector] Initializing selectedAudiologists with all audiologists');
           setSelectedAudiologists(mappedAudiologists);
@@ -103,7 +103,8 @@ export function AudiologistSelector() {
 
   // Ensure selectedAudiologists is always an array
   const selectedCount = (selectedAudiologists || []).length;
-  const displayText = selectedCount === 0 ? 'All' : `${selectedCount} selected`;
+  const totalCount = audiologists.length;
+  const displayText = selectedCount === 0 ? 'None' : selectedCount === totalCount ? 'All' : `${selectedCount}`;
 
   return (
     <React.Fragment>

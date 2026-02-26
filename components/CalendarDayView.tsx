@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -92,6 +93,7 @@ export function CalendarDayView({
 }: CalendarDayViewProps) {
   const theme = useTheme();
   const [slotHeight, setSlotHeight] = useState(60);
+  const [legendModalVisible, setLegendModalVisible] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -310,7 +312,7 @@ export function CalendarDayView({
         </View>
       )}
 
-      {/* Audiologist headers */}
+      {/* Audiologist headers with tappable legend */}
       <View style={[styles.audiologistHeaders, { backgroundColor: theme.colors.card }]}>
         <View style={{ width: TIME_COLUMN_WIDTH }} />
         {selectedAudiologists.map((audiologist, index) => {
@@ -318,7 +320,15 @@ export function CalendarDayView({
           const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
           
           return (
-            <View key={audiologist.user_id} style={[styles.audiologistHeader, { width: columnWidth }]}>
+            <TouchableOpacity
+              key={audiologist.user_id}
+              style={[styles.audiologistHeader, { width: columnWidth }]}
+              onPress={() => {
+                console.log('[CalendarDayView] Legend tapped for:', audiologist.full_name);
+                setLegendModalVisible(true);
+              }}
+              activeOpacity={0.7}
+            >
               <View style={[styles.audiologistColorDot, { backgroundColor: color }]} />
               <Text style={[styles.audiologistName, { color: theme.colors.text }]} numberOfLines={1}>
                 {audiologist.full_name}
@@ -330,7 +340,7 @@ export function CalendarDayView({
                   </Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -427,9 +437,62 @@ export function CalendarDayView({
 
       <View style={[styles.footer, { backgroundColor: theme.colors.card }]}>
         <Text style={[styles.footerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-          Pinch to zoom • Swipe to navigate • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''}
+          Pinch to zoom • Swipe to navigate • Tap legend for names • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''}
         </Text>
       </View>
+
+      {/* Legend Modal */}
+      <Modal
+        visible={legendModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLegendModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.legendModalOverlay}
+          activeOpacity={1}
+          onPress={() => setLegendModalVisible(false)}
+        >
+          <View style={[styles.legendModalContent, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.legendModalHeader}>
+              <Text style={[styles.legendModalTitle, { color: theme.colors.text }]}>
+                Audiologist Legend
+              </Text>
+              <TouchableOpacity
+                style={[styles.legendCloseButton, { backgroundColor: `${theme.colors.primary}20` }]}
+                onPress={() => setLegendModalVisible(false)}
+              >
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.legendList}>
+              {selectedAudiologists.map((audiologist, index) => {
+                const color = getAudiologistColor(index);
+                const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
+
+                return (
+                  <View key={audiologist.user_id} style={styles.legendItem}>
+                    <View style={[styles.legendColorBox, { backgroundColor: color }]} />
+                    <View style={styles.legendTextContainer}>
+                      <Text style={[styles.legendName, { color: theme.colors.text }]}>
+                        {audiologist.full_name}
+                      </Text>
+                      <Text style={[styles.legendCount, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        {appointmentCount} appointment{appointmentCount !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -630,5 +693,69 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
+  },
+  legendModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  legendModalContent: {
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  legendModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  legendModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  legendCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legendList: {
+    maxHeight: 400,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  legendColorBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  legendTextContainer: {
+    flex: 1,
+  },
+  legendName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  legendCount: {
+    fontSize: 13,
   },
 });
