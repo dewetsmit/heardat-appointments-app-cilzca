@@ -10,13 +10,6 @@ import {
   Modal,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-} from 'react-native-reanimated';
 import { IconSymbol } from '@/components/IconSymbol';
 import { Audiologist } from '@/types';
 
@@ -94,27 +87,11 @@ export function CalendarDayView({
   const theme = useTheme();
   const [slotHeight, setSlotHeight] = useState(60);
   const [legendModalVisible, setLegendModalVisible] = useState(false);
-  const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Separate full-day events from regular appointments
   const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
   const regularAppointments = appointments.filter(apt => !isFullDayEvent(apt.Duration));
-
-  // Swipe gesture handlers
-  const swipeGesture = Gesture.Pan()
-    .onEnd((event) => {
-      const SWIPE_THRESHOLD = 50;
-      
-      if (event.translationX > SWIPE_THRESHOLD && onSwipeRight) {
-        console.log('[CalendarDayView] Swipe right detected - going to previous day');
-        onSwipeRight();
-      } else if (event.translationX < -SWIPE_THRESHOLD && onSwipeLeft) {
-        console.log('[CalendarDayView] Swipe left detected - going to next day');
-        onSwipeLeft();
-      }
-    });
 
   // Generate time slots based on current zoom level (6am to 7pm)
   const generateTimeSlots = () => {
@@ -168,31 +145,6 @@ export function CalendarDayView({
     return { top, height };
   };
 
-  const updateSlotHeight = (newHeight: number) => {
-    const clampedHeight = Math.max(MIN_SLOT_HEIGHT, Math.min(MAX_SLOT_HEIGHT, newHeight));
-    setSlotHeight(clampedHeight);
-  };
-
-  const pinchGesture = Gesture.Pinch()
-    .onUpdate((event) => {
-      scale.value = savedScale.value * event.scale;
-    })
-    .onEnd(() => {
-      const newHeight = slotHeight * scale.value;
-      runOnJS(updateSlotHeight)(newHeight);
-      savedScale.value = 1;
-      scale.value = 1;
-    });
-
-  // Combine gestures - pinch and swipe
-  const combinedGesture = Gesture.Race(pinchGesture, swipeGesture);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
-
   const timeSlots = generateTimeSlots();
   const currentTime = new Date();
   const currentHour = currentTime.getHours();
@@ -240,9 +192,35 @@ export function CalendarDayView({
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
-        <Text style={[styles.dateText, { color: theme.colors.text }]}>
-          {dateDisplay}
-        </Text>
+        <View style={styles.navigationButtons}>
+          <TouchableOpacity
+            style={[styles.navButton, { backgroundColor: `${theme.colors.primary}20` }]}
+            onPress={onSwipeRight}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="chevron-left"
+              size={20}
+              color={theme.colors.primary}
+            />
+          </TouchableOpacity>
+          <Text style={[styles.dateText, { color: theme.colors.text }]}>
+            {dateDisplay}
+          </Text>
+          <TouchableOpacity
+            style={[styles.navButton, { backgroundColor: `${theme.colors.primary}20` }]}
+            onPress={onSwipeLeft}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron-right"
+              size={20}
+              color={theme.colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
         <View style={styles.zoomIndicator}>
           <IconSymbol
             ios_icon_name="magnifyingglass"
@@ -345,99 +323,95 @@ export function CalendarDayView({
         })}
       </View>
 
-      <GestureDetector gesture={combinedGesture}>
-        <Animated.View style={[styles.calendarContainer, animatedStyle]}>
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.scrollView}
-            showsVerticalScrollIndicator={true}
-            scrollEventThrottle={16}
-            contentContainerStyle={{ paddingBottom: 100 }}
-          >
-            <View style={styles.timelineContainer}>
-              {/* Time labels */}
-              <View style={styles.timeLabelsColumn}>
-                {timeSlots.map((slot, index) => (
-                  <View key={index} style={[styles.timeSlot, { height: slotHeight }]}>
-                    <Text style={[styles.timeLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                      {slot.displayTime}
-                    </Text>
-                  </View>
-                ))}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={true}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        <View style={styles.timelineContainer}>
+          {/* Time labels */}
+          <View style={styles.timeLabelsColumn}>
+            {timeSlots.map((slot, index) => (
+              <View key={index} style={[styles.timeSlot, { height: slotHeight }]}>
+                <Text style={[styles.timeLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                  {slot.displayTime}
+                </Text>
               </View>
+            ))}
+          </View>
 
-              {/* Audiologist columns */}
-              <View style={styles.columnsContainer}>
-                {selectedAudiologists.map((audiologist, audiologistIndex) => {
-                  const color = getAudiologistColor(audiologistIndex);
-                  const audiologistAppointments = appointmentsByAudiologist[audiologist.user_id] || [];
+          {/* Audiologist columns */}
+          <View style={styles.columnsContainer}>
+            {selectedAudiologists.map((audiologist, audiologistIndex) => {
+              const color = getAudiologistColor(audiologistIndex);
+              const audiologistAppointments = appointmentsByAudiologist[audiologist.user_id] || [];
 
-                  return (
-                    <View key={audiologist.user_id} style={[styles.audiologistColumn, { width: columnWidth }]}>
-                      {/* Grid lines */}
-                      {timeSlots.map((slot, index) => (
-                        <View
-                          key={index}
-                          style={[
-                            styles.gridLine,
-                            { height: slotHeight, borderTopColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
-                          ]}
-                        />
-                      ))}
+              return (
+                <View key={audiologist.user_id} style={[styles.audiologistColumn, { width: columnWidth }]}>
+                  {/* Grid lines */}
+                  {timeSlots.map((slot, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.gridLine,
+                        { height: slotHeight, borderTopColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
+                      ]}
+                    />
+                  ))}
 
-                      {/* Current time indicator */}
-                      {showCurrentTimeIndicator && (
-                        <View
-                          style={[
-                            styles.currentTimeIndicator,
-                            { top: currentTimePosition, backgroundColor: theme.colors.primary },
-                          ]}
-                        />
-                      )}
+                  {/* Current time indicator */}
+                  {showCurrentTimeIndicator && (
+                    <View
+                      style={[
+                        styles.currentTimeIndicator,
+                        { top: currentTimePosition, backgroundColor: theme.colors.primary },
+                      ]}
+                    />
+                  )}
 
-                      {/* Appointments */}
-                      {audiologistAppointments.map((appointment) => {
-                        console.log('[APPOINTMENT]', appointment);
-                        const position = getAppointmentPosition(appointment);
-                        const DateStringToDate = new Date(appointment.DateAppointment);
-                        const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
-                        const timeText = formatTimeDisplay(time.hour, time.minute);
+                  {/* Appointments */}
+                  {audiologistAppointments.map((appointment) => {
+                    console.log('[APPOINTMENT]', appointment);
+                    const position = getAppointmentPosition(appointment);
+                    const DateStringToDate = new Date(appointment.DateAppointment);
+                    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
+                    const timeText = formatTimeDisplay(time.hour, time.minute);
 
-                        return (
-                          <TouchableOpacity
-                            key={appointment.AppointmentID}
-                            style={[
-                              styles.appointmentBlock,
-                              {
-                                top: position.top,
-                                height: Math.max(position.height, 40),
-                                backgroundColor: color,
-                              },
-                            ]}
-                            onPress={() => onAppointmentPress?.(appointment)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.appointmentTime} numberOfLines={1}>
-                              {timeText}
-                            </Text>
-                            <Text style={styles.appointmentClient} numberOfLines={1}>
-                              {appointment.FirstName}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          </ScrollView>
-        </Animated.View>
-      </GestureDetector>
+                    return (
+                      <TouchableOpacity
+                        key={appointment.AppointmentID}
+                        style={[
+                          styles.appointmentBlock,
+                          {
+                            top: position.top,
+                            height: Math.max(position.height, 40),
+                            backgroundColor: color,
+                          },
+                        ]}
+                        onPress={() => onAppointmentPress?.(appointment)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.appointmentTime} numberOfLines={1}>
+                          {timeText}
+                        </Text>
+                        <Text style={styles.appointmentClient} numberOfLines={1}>
+                          {appointment.FirstName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </ScrollView>
 
       <View style={[styles.footer, { backgroundColor: theme.colors.card }]}>
         <Text style={[styles.footerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-          Pinch to zoom • Swipe to navigate • Tap legend for names • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''}
+          Tap arrows to navigate • Tap legend for names • {regularAppointments.length} appointment{regularAppointments.length !== 1 ? 's' : ''}
         </Text>
       </View>
 
@@ -504,24 +478,38 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  navButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   dateText: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
   },
   zoomIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.05)',
+    alignSelf: 'center',
   },
   zoomText: {
     fontSize: 12,
@@ -619,9 +607,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-  calendarContainer: {
-    flex: 1,
   },
   scrollView: {
     flex: 1,
