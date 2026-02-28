@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Alert } from "react-native";
 import { useNetworkState } from "expo-network";
@@ -170,7 +169,6 @@ function RootLayoutNav() {
                 />
                 <Stack.Screen name="+not-found" />
               </Stack>
-              <SystemBars style={"auto"} />
             </GestureHandlerRootView>
           </AppointmentProvider>
         </WidgetProvider>
