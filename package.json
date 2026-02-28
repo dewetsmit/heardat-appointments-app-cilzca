@@ -1,3 +1,4 @@
+
 {
   "name": "heardat-appointments-app-cilzca",
   "version": "2.2.3",
@@ -51,7 +52,6 @@
     "react-native": "0.81.4",
     "react-native-calendars": "^1.1313.0",
     "react-native-css-interop": "^0.1.22",
-    "react-native-edge-to-edge": "^1.7.0",
     "react-native-gesture-handler": "^2.24.0",
     "react-native-maps": "^1.20.1",
     "react-native-reanimated": "~4.1.0",
