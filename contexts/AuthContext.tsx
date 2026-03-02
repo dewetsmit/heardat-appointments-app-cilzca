@@ -38,6 +38,9 @@ interface AuthContextType {
   signInWithGitHub: () => Promise<void>;
   signOut: () => Promise<void>;
   fetchUser: () => Promise<void>;
+  setRedirectPath: (path: string) => void;
+  getRedirectPath: () => string | null;
+  clearRedirectPath: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -76,10 +79,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [userKey, setUserKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [redirectPath, setRedirectPathState] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUser();
   }, []);
+
+  const setRedirectPath = async (path: string) => {
+    console.log('[AuthContext] Setting redirect path:', path);
+    setRedirectPathState(path);
+    await storage.setItem("redirect_path", path);
+  };
+
+  const getRedirectPath = (): string | null => {
+    return redirectPath;
+  };
+
+  const clearRedirectPath = async () => {
+    console.log('[AuthContext] Clearing redirect path');
+    setRedirectPathState(null);
+    await storage.deleteItem("redirect_path");
+  };
 
   const fetchUser = async () => {
     try {
@@ -89,6 +109,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedSessionKey = await storage.getItem("session_key");
       const storedUserKey = await storage.getItem("UserKey");
       const storedUserData = await storage.getItem("CurrentUser");
+      const storedRedirectPath = await storage.getItem("redirect_path");
+      
+      if (storedRedirectPath) {
+        setRedirectPathState(storedRedirectPath);
+      }
       
       if (storedSessionKey && storedUserKey && storedUserData) {
         console.log('Found stored session, verifying with API...');
@@ -441,11 +466,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await storage.deleteItem("Username");
       await storage.deleteItem("Password");
       await storage.deleteItem("CurrentUser");
+      await storage.deleteItem("redirect_path");
       
       setUser(null);
       setToken(null);
       setSessionKey(null);
       setUserKey(null);
+      setRedirectPathState(null);
       
       console.log('Sign out successful');
     } catch (error) {
@@ -469,6 +496,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithGitHub,
         signOut,
         fetchUser,
+        setRedirectPath,
+        getRedirectPath,
+        clearRedirectPath,
       }}
     >
       {children}

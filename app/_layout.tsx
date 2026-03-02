@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Alert } from "react-native";
@@ -28,8 +28,9 @@ export const unstable_settings = {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const networkState = useNetworkState();
-  const { user, loading } = useAuth();
+  const { user, loading, getRedirectPath, clearRedirectPath } = useAuth();
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
 
   const [loaded] = useFonts({
@@ -75,14 +76,22 @@ function RootLayoutNav() {
       console.log('User not authenticated, redirecting to /auth');
       router.replace('/auth');
     } else if (user && inAuthGroup) {
-      // User is authenticated but still on auth pages - redirect to calendar
-      console.log('User authenticated, redirecting to /calendar');
-      router.replace('/calendar');
+      // User is authenticated but still on auth pages
+      // Check if there's a redirect path to return to
+      const redirectPath = getRedirectPath();
+      if (redirectPath) {
+        console.log('User authenticated, redirecting to saved path:', redirectPath);
+        clearRedirectPath();
+        router.replace(redirectPath as any);
+      } else {
+        console.log('User authenticated, redirecting to /calendar');
+        router.replace('/calendar');
+      }
     } else if (user) {
       // User is authenticated and on a valid page
       console.log('User authenticated, allowing navigation to:', segments.join('/'));
     }
-  }, [user, segments, loading, loaded, router]);
+  }, [user, segments, loading, loaded, router, getRedirectPath, clearRedirectPath]);
 
 
   const CustomDefaultTheme: Theme = {

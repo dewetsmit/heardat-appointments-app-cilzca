@@ -21,6 +21,7 @@ import { CalendarWeekView } from '@/components/CalendarWeekView';
 import { AudiologistSelector } from '@/components/AudiologistSelector';
 import SideNav from '@/components/SideNav';
 import { CalendarDayView } from '@/components/CalendarDayView';
+import { FABMenu } from '@/components/FABMenu';
 import moment from 'moment';
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -517,6 +518,8 @@ export default function CalendarScreen() {
         </ScrollView>
       )}
 
+      <FABMenu />
+
       <SideNav visible={sideNavVisible} onClose={() => setSideNavVisible(false)} />
     </SafeAreaView>
   );
@@ -591,6 +594,7 @@ const styles = StyleSheet.create({
   },
   monthViewContainer: {
     padding: 16,
+    paddingBottom: 100,
   },
   appointmentsList: {
     marginTop: 24,
