@@ -37,12 +37,12 @@ interface CalendarDayViewProps {
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const MIN_SLOT_HEIGHT = 40;
-const DEFAULT_SLOT_HEIGHT = 60;
-const MAX_SLOT_HEIGHT = 120;
 const TIME_COLUMN_WIDTH = 70;
 const START_HOUR = 6; // 6am
 const END_HOUR = 19; // 7pm (19:00)
+
+// Available slot intervals in minutes
+const SLOT_INTERVALS = [15, 30, 60, 120];
 
 // Color palette for audiologists
 const AUDIOLOGIST_COLORS = [
@@ -85,21 +85,24 @@ export function CalendarDayView({
   onSwipeRight 
 }: CalendarDayViewProps) {
   const theme = useTheme();
-  const [slotHeight, setSlotHeight] = useState(60);
+  const [slotInterval, setSlotInterval] = useState(60); // Current interval in minutes
   const [legendModalVisible, setLegendModalVisible] = useState(false);
+  const [intervalModalVisible, setIntervalModalVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Calculate slot height based on interval (60 minutes = 60px baseline)
+  const slotHeight = slotInterval;
 
   // Separate full-day events from regular appointments
   const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
   const regularAppointments = appointments.filter(apt => !isFullDayEvent(apt.Duration));
 
-  // Generate time slots based on current zoom level (6am to 7pm)
+  // Generate time slots based on current interval (6am to 7pm)
   const generateTimeSlots = () => {
     const slots = [];
-    const interval = 60;
 
     for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
-      for (let minute = 0; minute < 60; minute += interval) {
+      for (let minute = 0; minute < 60; minute += slotInterval) {
         // Don't add slots after 7pm
         if (hour === END_HOUR && minute > 0) break;
         
@@ -135,8 +138,7 @@ export function CalendarDayView({
     
     // Calculate minutes from START_HOUR (6am)
     const totalMinutesFromStart = (time.hour - START_HOUR) * 60 + time.minute;
-    const minutesPerSlot = 60;
-    const pixelsPerMinute = slotHeight / minutesPerSlot;
+    const pixelsPerMinute = slotHeight / slotInterval;
     
     const top = totalMinutesFromStart * pixelsPerMinute;
     const durationMinutes = parseDurationToMinutes(appointment.Duration);
@@ -152,7 +154,8 @@ export function CalendarDayView({
   
   // Calculate current time position relative to START_HOUR
   const currentMinutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-  const currentTimePosition = currentMinutesFromStart * (slotHeight / 60);
+  const pixelsPerMinute = slotHeight / slotInterval;
+  const currentTimePosition = currentMinutesFromStart * pixelsPerMinute;
 
   const isToday = new Date(selectedDate).toDateString() === new Date().toDateString();
   const showCurrentTimeIndicator = isToday && currentHour >= START_HOUR && currentHour <= END_HOUR;
@@ -164,7 +167,7 @@ export function CalendarDayView({
     year: 'numeric',
   });
 
-  const intervalText = '60 min';
+  const intervalText = `${slotInterval} min`;
 
   // Calculate column width based on number of audiologists
   const numAudiologists = selectedAudiologists.length;
@@ -187,6 +190,12 @@ export function CalendarDayView({
   // Get color for audiologist
   const getAudiologistColor = (index: number): string => {
     return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
+  };
+
+  const handleIntervalChange = (newInterval: number) => {
+    console.log('[CalendarDayView] Changing slot interval to:', newInterval, 'minutes');
+    setSlotInterval(newInterval);
+    setIntervalModalVisible(false);
   };
 
   return (
@@ -221,17 +230,30 @@ export function CalendarDayView({
             />
           </TouchableOpacity>
         </View>
-        <View style={styles.zoomIndicator}>
+        <TouchableOpacity
+          style={styles.zoomIndicator}
+          onPress={() => {
+            console.log('[CalendarDayView] Opening interval selector');
+            setIntervalModalVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
           <IconSymbol
-            ios_icon_name="magnifyingglass"
-            android_material_icon_name="search"
+            ios_icon_name="clock"
+            android_material_icon_name="schedule"
             size={16}
             color={theme.dark ? '#98989D' : '#666'}
           />
           <Text style={[styles.zoomText, { color: theme.dark ? '#98989D' : '#666' }]}>
             {intervalText}
           </Text>
-        </View>
+          <IconSymbol
+            ios_icon_name="chevron.down"
+            android_material_icon_name="arrow-drop-down"
+            size={16}
+            color={theme.dark ? '#98989D' : '#666'}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Full-day events section */}
@@ -464,6 +486,89 @@ export function CalendarDayView({
                 );
               })}
             </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Interval Selector Modal */}
+      <Modal
+        visible={intervalModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIntervalModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.intervalModalOverlay}
+          activeOpacity={1}
+          onPress={() => setIntervalModalVisible(false)}
+        >
+          <View style={[styles.intervalModalContent, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.intervalModalHeader}>
+              <Text style={[styles.intervalModalTitle, { color: theme.colors.text }]}>
+                Select Time Slot Size
+              </Text>
+              <TouchableOpacity
+                style={[styles.intervalCloseButton, { backgroundColor: `${theme.colors.primary}20` }]}
+                onPress={() => setIntervalModalVisible(false)}
+              >
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.intervalList}>
+              {SLOT_INTERVALS.map((interval) => {
+                const isSelected = interval === slotInterval;
+                const intervalLabel = `${interval} minutes`;
+                
+                return (
+                  <TouchableOpacity
+                    key={interval}
+                    style={[
+                      styles.intervalOption,
+                      { 
+                        backgroundColor: isSelected ? `${theme.colors.primary}20` : 'transparent',
+                        borderColor: isSelected ? theme.colors.primary : (theme.dark ? '#2C2C2E' : '#E5E5EA'),
+                      }
+                    ]}
+                    onPress={() => handleIntervalChange(interval)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.intervalOptionContent}>
+                      <IconSymbol
+                        ios_icon_name="clock"
+                        android_material_icon_name="schedule"
+                        size={24}
+                        color={isSelected ? theme.colors.primary : (theme.dark ? '#98989D' : '#666')}
+                      />
+                      <Text style={[
+                        styles.intervalOptionText,
+                        { 
+                          color: isSelected ? theme.colors.primary : theme.colors.text,
+                          fontWeight: isSelected ? '700' : '600',
+                        }
+                      ]}>
+                        {intervalLabel}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <IconSymbol
+                        ios_icon_name="checkmark.circle.fill"
+                        android_material_icon_name="check-circle"
+                        size={24}
+                        color={theme.colors.primary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={[styles.intervalHint, { color: theme.dark ? '#98989D' : '#666' }]}>
+              Smaller intervals show more detail, larger intervals provide better overview
+            </Text>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -742,5 +847,66 @@ const styles = StyleSheet.create({
   },
   legendCount: {
     fontSize: 13,
+  },
+  intervalModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  intervalModalContent: {
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  intervalModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  intervalModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  intervalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  intervalList: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  intervalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  intervalOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  intervalOptionText: {
+    fontSize: 16,
+  },
+  intervalHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
