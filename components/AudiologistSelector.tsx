@@ -11,99 +11,25 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Audiologist } from '@/types';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getHeardatCredentials, getUsers, heardatApiCall } from '@/utils/api';
 
 export function AudiologistSelector() {
   const theme = useTheme();
   const { user } = useAuth();
-  const { selectedAudiologists, setSelectedAudiologists, toggleAudiologistSelection } = useAppointments();
+  const { 
+    selectedAudiologists, 
+    toggleAudiologistSelection,
+    allAudiologists,
+    isLoadingAudiologists 
+  } = useAppointments();
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [audiologists, setAudiologists] = useState<Audiologist[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const loadAudiologists = useCallback(async () => {
-    if (!user) {
-      console.log('[AudiologistSelector] User not available, skipping audiologist load');
-      return;
-    }
-
-    console.log('[AudiologistSelector] Loading audiologists');
-    try {
-      setIsLoading(true);
-      const credentials = await getHeardatCredentials();
-      const data = await getUsers();
-      console.log('[AudiologistSelector] Audiologists API raw response:', data);
-
-      // Parse the response if it's a string
-      let parsedData = data;
-      if (typeof data === 'string') {
-        parsedData = JSON.parse(data);
-      }
-
-      console.log('[AudiologistSelector] Parsed audiologists data:', parsedData);
-
-      // Check if we have a users array in the response
-      if (parsedData && parsedData.users && Array.isArray(parsedData.users)) {
-        const mappedAudiologists: Audiologist[] = parsedData.users.map((user: any) => ({
-          id: user.UserID?.toString() || user.id,
-          user_id: user.UserID?.toString() || user.id,
-          full_name: user.Name || user.FirstName + ' ' + user.LastName || 'Unknown',
-          specialization: user.Specialization || '',
-          is_active: user.Active === '1' || user.is_active === true,
-        }));
-        
-        console.log('[AudiologistSelector] Audiologists loaded:', mappedAudiologists.length);
-        setAudiologists(mappedAudiologists);
-        
-        // Only initialize selectedAudiologists if empty (on first load)
-        if (!selectedAudiologists || selectedAudiologists.length === 0) {
-          console.log('[AudiologistSelector] Initializing selectedAudiologists with all audiologists');
-          setSelectedAudiologists(mappedAudiologists);
-        }
-      } else if (Array.isArray(parsedData)) {
-        // Fallback: if data is directly an array
-        console.log('[AudiologistSelector] Data is array, mapping directly');
-        const mappedAudiologists: Audiologist[] = parsedData.map((user: any) => ({
-          id: user.UserID?.toString() || user.id,
-          user_id: user.UserID?.toString() || user.id,
-          full_name: user.Name || user.FirstName + ' ' + user.LastName || 'Unknown',
-          specialization: user.Specialization || '',
-          is_active: user.Active === '1' || user.is_active === true,
-        }));
-        
-        console.log('[AudiologistSelector] Audiologists loaded:', mappedAudiologists.length);
-        setAudiologists(mappedAudiologists);
-        
-        // Only initialize selectedAudiologists if empty (on first load)
-        if (!selectedAudiologists || selectedAudiologists.length === 0) {
-          console.log('[AudiologistSelector] Initializing selectedAudiologists with all audiologists');
-          setSelectedAudiologists(mappedAudiologists);
-        }
-      } else {
-        console.log('[AudiologistSelector] No audiologists data in response');
-        setAudiologists([]);
-      }
-    } catch (error) {
-      console.error('[AudiologistSelector] Failed to load audiologists:', error);
-      setAudiologists([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, selectedAudiologists, setSelectedAudiologists]);
-
-  useEffect(() => {
-    if (modalVisible) {
-      loadAudiologists();
-    }
-  }, [modalVisible, loadAudiologists]);
 
   // Ensure selectedAudiologists is always an array
   const selectedCount = (selectedAudiologists || []).length;
-  const totalCount = audiologists.length;
+  const totalCount = allAudiologists.length;
   const displayText = selectedCount === 0 ? 'None' : selectedCount === totalCount ? 'All' : `${selectedCount}`;
 
   return (
@@ -154,14 +80,14 @@ export function AudiologistSelector() {
               </TouchableOpacity>
             </View>
 
-            {isLoading ? (
+            {isLoadingAudiologists ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
                 <Text style={[styles.loadingText, { color: theme.dark ? '#98989D' : '#666' }]}>
                   Loading audiologists...
                 </Text>
               </View>
-            ) : audiologists.length === 0 ? (
+            ) : allAudiologists.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <IconSymbol
                   ios_icon_name="person.slash"
@@ -175,7 +101,7 @@ export function AudiologistSelector() {
               </View>
             ) : (
               <ScrollView style={styles.audiologistList}>
-                {audiologists.map((audiologist) => {
+                {allAudiologists.map((audiologist) => {
                   const isSelected = (selectedAudiologists || []).some((a) => a.id === audiologist.id);
 
                   return (

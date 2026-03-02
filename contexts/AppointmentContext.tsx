@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Audiologist } from '@/types';
-import { getHeardatCredentials, heardatApiCall } from '@/utils/api';
+import { getHeardatCredentials, getUsers } from '@/utils/api';
 
 interface AppointmentContextType {
   selectedAudiologists: Audiologist[];
@@ -21,31 +21,17 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   // Load audiologists on mount
   useEffect(() => {
     const loadAudiologists = async () => {
-      const credentials = await getHeardatCredentials();
       console.log('[AppointmentContext] Loading audiologists on mount');
       try {
         setIsLoadingAudiologists(true);
 
-        const params = {
-          UserID: credentials.userId || "0",
-          CompanyID: credentials.companyId || "0",
-          Key: credentials.userKey || "0"
-        };
+        // Call getUsers which fetches from AppointmentUsers endpoint
+        const appointmentUsers = await getUsers();
+        console.log('[AppointmentContext] AppointmentUsers API response:', appointmentUsers);
 
-        const data = await heardatApiCall('Users', params);
-        console.log('[AppointmentContext] Audiologists API raw response:', data);
-
-        // Parse the response if it's a string
-        let parsedData = data;
-        if (typeof data === 'string') {
-          parsedData = JSON.parse(data);
-        }
-
-        console.log('[AppointmentContext] Parsed audiologists data:', parsedData);
-
-        // Check if we have a users array in the response
-        if (parsedData && parsedData.users && Array.isArray(parsedData.users)) {
-          const mappedAudiologists: Audiologist[] = parsedData.users.map((user: any) => ({
+        // appointmentUsers is already the array from the API (appointmentusers)
+        if (Array.isArray(appointmentUsers) && appointmentUsers.length > 0) {
+          const mappedAudiologists: Audiologist[] = appointmentUsers.map((user: any) => ({
             id: user.UserID?.toString() || user.id,
             user_id: user.UserID?.toString() || user.id,
             full_name: `${user.FirstName || ''} ${user.LastName || ''}`.trim() || user.Name || user.FullName || 'Unknown',
@@ -53,32 +39,22 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
             is_active: user.Active === '1' || user.is_active === true,
           }));
           
-          console.log('[AppointmentContext] Audiologists loaded:', mappedAudiologists.length);
-          console.log('[AppointmentContext] First audiologist:', mappedAudiologists[0]);
-          setAllAudiologists(mappedAudiologists);
-          setSelectedAudiologists(mappedAudiologists);
-        } else if (Array.isArray(parsedData)) {
-          // Fallback: if data is directly an array
-          console.log('[AppointmentContext] Data is array, mapping directly');
-          const mappedAudiologists: Audiologist[] = parsedData.map((user: any) => ({
-            id: user.UserID?.toString() || user.id,
-            user_id: user.UserID?.toString() || user.id,
-            full_name: `${user.FirstName || ''} ${user.LastName || ''}`.trim() || user.Name || user.FullName || 'Unknown',
-            specialization: user.Specialization || '',
-            is_active: user.Active === '1' || user.is_active === true,
-          }));
+          console.log('[AppointmentContext] Mapped appointment users:', mappedAudiologists.length);
+          console.log('[AppointmentContext] First appointment user:', mappedAudiologists[0]);
           
-          console.log('[AppointmentContext] Audiologists loaded:', mappedAudiologists.length);
-          console.log('[AppointmentContext] First audiologist:', mappedAudiologists[0]);
+          // Set all audiologists
           setAllAudiologists(mappedAudiologists);
+          
+          // Select ALL appointment users by default
           setSelectedAudiologists(mappedAudiologists);
+          console.log('[AppointmentContext] All appointment users selected by default');
         } else {
-          console.log('[AppointmentContext] No audiologists data in response');
+          console.log('[AppointmentContext] No appointment users found in response');
           setAllAudiologists([]);
           setSelectedAudiologists([]);
         }
       } catch (error) {
-        console.error('[AppointmentContext] Failed to load audiologists:', error);
+        console.error('[AppointmentContext] Failed to load appointment users:', error);
         setAllAudiologists([]);
         setSelectedAudiologists([]);
       } finally {

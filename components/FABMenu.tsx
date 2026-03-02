@@ -39,35 +39,43 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
   };
 
   const handleCreateAppointment = () => {
-    console.log('[FABMenu] Create Appointment pressed');
+    console.log('[FABMenu] Create Appointment pressed - navigating to /create-appointment');
     setIsOpen(false);
+    
+    // Close the menu animation
     Animated.timing(animation, {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
-    }).start(() => {
-      if (onCreateAppointment) {
-        onCreateAppointment();
-      } else {
-        router.push('/create-appointment');
-      }
-    });
+    }).start();
+    
+    // Navigate immediately without waiting for animation
+    if (onCreateAppointment) {
+      onCreateAppointment();
+    } else {
+      console.log('[FABMenu] Pushing to /create-appointment');
+      router.push('/create-appointment');
+    }
   };
 
   const handleCreateClient = () => {
-    console.log('[FABMenu] Create Client pressed');
+    console.log('[FABMenu] Create Client pressed - navigating to /new-client');
     setIsOpen(false);
+    
+    // Close the menu animation
     Animated.timing(animation, {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
-    }).start(() => {
-      if (onCreateClient) {
-        onCreateClient();
-      } else {
-        router.push('/new-client');
-      }
-    });
+    }).start();
+    
+    // Navigate immediately without waiting for animation
+    if (onCreateClient) {
+      onCreateClient();
+    } else {
+      console.log('[FABMenu] Pushing to /new-client');
+      router.push('/new-client');
+    }
   };
 
   const appointmentTranslateY = animation.interpolate({
