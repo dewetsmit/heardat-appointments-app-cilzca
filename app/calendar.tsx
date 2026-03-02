@@ -53,12 +53,12 @@ export default function CalendarScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { user } = useAuth();
-  const { selectedAudiologists } = useAppointments();
+  const { selectedAudiologists, allAudiologists, isLoadingAudiologists } = useAppointments();
 
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
   const [appointments, setAppointments] = useState<HeardatAppointment[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sideNavVisible, setSideNavVisible] = useState(false);
 
@@ -76,7 +76,7 @@ export default function CalendarScreen() {
 
     console.log('[Calendar] Loading appointments for', selectedAudiologists.length, 'audiologists on date:', selectedDate, 'viewMode:', viewMode);
     try {
-      setIsLoading(true);
+      setIsLoadingAppointments(true);
 
       // Calculate date range based on view mode
       let startDate = selectedDate;
@@ -138,13 +138,16 @@ export default function CalendarScreen() {
       console.error('[Calendar] Failed to load appointments:', error);
       setAppointments([]);
     } finally {
-      setIsLoading(false);
+      setIsLoadingAppointments(false);
     }
   }, [selectedDate, user, selectedAudiologists, viewMode]);
 
   useEffect(() => {
-    loadAppointments();
-  }, [loadAppointments]);
+    // Only load appointments if audiologists are loaded and selected
+    if (!isLoadingAudiologists && selectedAudiologists.length > 0) {
+      loadAppointments();
+    }
+  }, [loadAppointments, isLoadingAudiologists, selectedAudiologists.length]);
 
   const handleRefresh = async () => {
     console.log('[Calendar] User triggered refresh');
@@ -281,6 +284,50 @@ export default function CalendarScreen() {
 
   const noAudiologistsSelectedText = 'No audiologists selected';
   const selectAudiologistsText = 'Please select audiologists from the dropdown above';
+  const loadingAudiologistsText = 'Loading audiologists...';
+  const loadingAppointmentsText = 'Loading appointments...';
+
+  // Show loader while audiologists are loading
+  if (isLoadingAudiologists) {
+    return (
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+        edges={['top']}
+      >
+        <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setSideNavVisible(true)}
+          >
+            <IconSymbol
+              ios_icon_name="line.3.horizontal"
+              android_material_icon_name="menu"
+              size={28}
+              color={theme.colors.text}
+            />
+          </TouchableOpacity>
+
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+            Calendar
+          </Text>
+
+          <AudiologistSelector />
+        </View>
+
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            {loadingAudiologistsText}
+          </Text>
+        </View>
+
+        <SideNav visible={sideNavVisible} onClose={() => setSideNavVisible(false)} />
+      </SafeAreaView>
+    );
+  }
+
+  // Show loader while appointments are loading (after audiologists are loaded)
+  const showAppointmentLoader = isLoadingAppointments && !isRefreshing && selectedAudiologists.length > 0;
 
   return (
     <SafeAreaView
@@ -375,9 +422,12 @@ export default function CalendarScreen() {
             {selectAudiologistsText}
           </Text>
         </View>
-      ) : isLoading && !isRefreshing ? (
+      ) : showAppointmentLoader ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            {loadingAppointmentsText}
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -576,6 +626,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
   emptyStateContainer: {
     flex: 1,

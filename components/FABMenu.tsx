@@ -8,6 +8,7 @@ import {
   Animated,
   Modal,
   TouchableWithoutFeedback,
+  Platform,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -71,12 +72,12 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
 
   const appointmentTranslateY = animation.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -70],
+    outputRange: [0, -80],
   });
 
   const clientTranslateY = animation.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -140],
+    outputRange: [0, -160],
   });
 
   const rotation = animation.interpolate({
@@ -88,6 +89,9 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
     inputRange: [0, 0.5, 1],
     outputRange: [0, 0, 1],
   });
+
+  const appointmentText = 'Appointment';
+  const clientText = 'Client';
 
   return (
     <>
@@ -126,7 +130,7 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
               color={theme.colors.primary}
             />
             <Text style={[styles.menuLabel, { color: theme.colors.text }]}>
-              Create Client
+              {clientText}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -152,7 +156,7 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
               color={theme.colors.primary}
             />
             <Text style={[styles.menuLabel, { color: theme.colors.text }]}>
-              Create Appointment
+              {appointmentText}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -200,20 +204,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     alignItems: 'flex-end',
+    ...Platform.select({
+      ios: {
+        zIndex: 1,
+      },
+    }),
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderRadius: 28,
-    marginBottom: 8,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
     gap: 12,
+    minWidth: 140,
   },
   menuLabel: {
     fontSize: 16,
