@@ -111,39 +111,8 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
           onRequestClose={toggleMenu}
         >
           <TouchableWithoutFeedback onPress={toggleMenu}>
-            <View style={styles.overlay} />
-          </TouchableWithoutFeedback>
-        </Modal>
-      )}
-
-      <View style={styles.fabContainer}>
-        <Animated.View
-          style={[
-            styles.menuItem,
-            {
-              transform: [{ translateY: clientTranslateY }],
-              opacity,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={[styles.menuButton, { backgroundColor: theme.colors.card }]}
-            onPress={handleCreateClient}
-            activeOpacity={0.8}
-          >
-            <IconSymbol
-              ios_icon_name="person.badge.plus"
-              android_material_icon_name="person-add"
-              size={24}
-              color={theme.colors.primary}
-            />
-            <Text style={[styles.menuLabel, { color: theme.colors.text }]}>
-              {clientText}
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View
+            <View style={styles.overlay}>
+                    <Animated.View
           style={[
             styles.menuItem,
             {
@@ -168,7 +137,37 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
             </Text>
           </TouchableOpacity>
         </Animated.View>
+                <Animated.View
+          style={[
+            styles.menuItem,
+            {
+              transform: [{ translateY: clientTranslateY }],
+              opacity,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.menuButton, { backgroundColor: theme.colors.card }]}
+            onPress={handleCreateClient}
+            activeOpacity={0.8}
+          >
+            <IconSymbol
+              ios_icon_name="person.badge.plus"
+              android_material_icon_name="person-add"
+              size={24}
+              color={theme.colors.primary}
+            />
+            <Text style={[styles.menuLabel, { color: theme.colors.text }]}>
+              {clientText}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+        </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
 
+      <View style={styles.fabContainer}>
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: theme.colors.primary }]}
           onPress={toggleMenu}
@@ -232,6 +231,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     gap: 12,
     minWidth: 140,
+    zIndex: 999,
   },
   menuLabel: {
     fontSize: 16,
@@ -239,6 +239,6 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: 'transparent'
   },
 });
