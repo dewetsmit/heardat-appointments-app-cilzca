@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Heardat Appointments",
-    "slug": "heardat-appointments",
+    "slug": "heardat-appointments-app-cilzca",
     "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/images/Heardat_icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.heardat.app"
+      "package": "com.heardat.heardatApp"
     },
     "web": {
       "favicon": "./assets/images/Heardat_icon.png",
@@ -41,7 +41,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://mt2nx2p2qg45rgu2mbbrhzpk8hd3se69.app.specular.dev"
+      "backendUrl": "https://prod-proj-m3cgy2mscxbadazggrj5k-liwg5h36mq-ey.a.run.app"
     }
   }
 }
