@@ -4,7 +4,7 @@
     "slug": "heardat-appointments",
     "version": "3.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/Heardat_icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
