@@ -36,3 +36,6 @@ pnpm-lock.yaml
 package-lock.json
 
 # Chat history contains presigned URLs that get flagged by GitHub
+
+# Local credentials (contains sensitive keystore passwords)
+credentials.json
