@@ -20,11 +20,12 @@
       }
     },
     "android": {
+      "versionCode": 99,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/Heardat_icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.heardat.heardatApp"
+      "package": "heardat.app.ionic"
     },
     "web": {
       "favicon": "./assets/images/Heardat_icon.png",
@@ -41,7 +42,10 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://prod-proj-m3cgy2mscxbadazggrj5k-liwg5h36mq-ey.a.run.app"
+      "backendUrl": "https://prod-proj-m3cgy2mscxbadazggrj5k-liwg5h36mq-ey.a.run.app",
+      "eas": {
+        "projectId": "c87e7478-8b25-4aa3-a009-3429209e5dbd"
+      }
     }
   }
 }

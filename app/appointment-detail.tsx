@@ -18,10 +18,12 @@ import { heardatApiCall, getHeardatCredentials } from '@/utils/api';
 
 interface AppointmentDetail {
   AppointmentID: string;
-  ClientName: string;
+  ClientName?: string;
+  FirstName?: string;
+  LastName?: string;
   ClientEmail?: string;
   ClientPhone?: string;
-  UserName: string;
+  UserName?: string;
   DateAppointment: string;
   TimeAppointment: string;
   Duration?: string;
@@ -52,24 +54,24 @@ export default function AppointmentDetailScreen() {
 
   const loadAppointmentDetails = async () => {
     console.log('[AppointmentDetail] Loading appointment details for ID:', appointmentId);
-    
+
     try {
       setLoading(true);
-      
+
       const params = {
         AppointmentID: appointmentId,
       };
-      
+
       const data = await heardatApiCall('Appointments', params);
-      
+
       let parsedData = data;
       if (typeof data === 'string') {
         parsedData = JSON.parse(data);
       }
-      
+
       // The API returns an array of appointments
       const appointments = parsedData.appointments || parsedData;
-      
+
       if (Array.isArray(appointments) && appointments.length > 0) {
         const appointmentData = appointments[0];
         console.log('[AppointmentDetail] Appointment loaded:', appointmentData);
@@ -86,11 +88,11 @@ export default function AppointmentDetailScreen() {
 
   const handleEdit = () => {
     console.log('[AppointmentDetail] Edit button pressed');
-    
+
     if (!appointment) {
       return;
     }
-    
+
     // Navigate to create-appointment screen with appointment data
     router.push({
       pathname: '/create-appointment',
@@ -110,30 +112,30 @@ export default function AppointmentDetailScreen() {
 
   const handleDelete = async () => {
     console.log('[AppointmentDetail] Confirming delete');
-    
+
     if (!appointment) {
       return;
     }
-    
+
     try {
       setDeleting(true);
       setShowDeleteModal(false);
-      
+
       const credentials = await getHeardatCredentials();
-      
+
       // Mark appointment as deleted in Heardat API
       const params = {
         AppointmentID: appointment.AppointmentID,
         Deleted: '1',
         UserID: credentials.userId || '0',
       };
-      
+
       console.log('[AppointmentDetail] Deleting appointment with params:', params);
-      
+
       await heardatApiCall('Appointments', params, 'PUT');
-      
+
       console.log('[AppointmentDetail] Appointment deleted successfully');
-      
+
       // Navigate back to calendar
       router.back();
     } catch (error) {
@@ -154,7 +156,7 @@ export default function AppointmentDetailScreen() {
         const minutes = parts[1];
         const ampm = hours >= 12 ? 'PM' : 'AM';
         const displayHours = hours % 12 || 12;
-        return `${displayHours}:${minutes} ${ampm}`;
+        return `${displayHours}:${minutes}`;
       }
     } catch (err) {
       console.error('[AppointmentDetail] Error formatting time:', err);
@@ -182,7 +184,7 @@ export default function AppointmentDetailScreen() {
       if (parts.length >= 2) {
         const hours = parseInt(parts[0], 10);
         const minutes = parseInt(parts[1], 10);
-        
+
         if (hours > 0 && minutes > 0) {
           const hoursText = `${hours} hour${hours > 1 ? 's' : ''}`;
           const minsText = `${minutes} min${minutes > 1 ? 's' : ''}`;
@@ -246,7 +248,7 @@ export default function AppointmentDetailScreen() {
   }
 
   const dateDisplay = formatDate(appointment.DateAppointment);
-  const timeDisplay = formatTime(appointment.TimeAppointment);
+  const timeDisplay = formatTime(appointment.DateAppointment);
   const durationDisplay = formatDuration(appointment.Duration);
 
   return (
@@ -293,7 +295,7 @@ export default function AppointmentDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             Client Information
           </Text>
-          
+
           <View style={styles.infoRow}>
             <IconSymbol
               ios_icon_name="person.fill"
@@ -305,7 +307,7 @@ export default function AppointmentDetailScreen() {
               Name
             </Text>
             <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-              {appointment.ClientName}
+              {appointment.FirstName} {appointment.LastName} {JSON.stringify(appointment)}
             </Text>
           </View>
 

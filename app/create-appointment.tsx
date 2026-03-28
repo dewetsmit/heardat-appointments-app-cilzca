@@ -18,9 +18,9 @@ import { useTheme } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { IconSymbol } from '@/components/IconSymbol';
 import moment from 'moment';
-import { 
-  getAllPatients, 
-  getBranches, 
+import {
+  getAllPatients,
+  getBranches,
   getAppointmentProcedures,
   heardatApiCall,
   getHeardatCredentials,
@@ -58,13 +58,22 @@ export default function CreateAppointmentScreen() {
   const { token } = useAuth();
 
   // Form state
-  const [date, setDate] = useState(new Date());
-  const [time, setTime] = useState(new Date());
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    d.setHours(8, 0, 0, 0);
+    return d;
+  });
+  const [time, setTime] = useState(() => {
+    const d = new Date();
+    d.setHours(8, 0, 0, 0);
+    return d;
+  });
   const [selectedClient, setSelectedClient] = useState<DropdownOption | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<DropdownOption | null>(null);
   const [selectedProcedure, setSelectedProcedure] = useState<DropdownOption | null>(null);
   const [selectedExaminer, setSelectedExaminer] = useState<DropdownOption | null>(null);
   const [selectedAssistant, setSelectedAssistant] = useState<DropdownOption | null>(null);
+  const [selectedAppointmentType, setSelectedAppointmentType] = useState<DropdownOption | null>({ id: 'Appointment', label: 'Appointment' });
   const [duration, setDuration] = useState(30);
   const [sendReminders, setSendReminders] = useState(true);
   const [repeatAppointment, setRepeatAppointment] = useState(false);
@@ -88,6 +97,7 @@ export default function CreateAppointmentScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadFormData = useCallback(async () => {
     console.log('[CreateAppointment] Loading form data');
@@ -98,11 +108,11 @@ export default function CreateAppointmentScreen() {
 
     try {
       setLoading(true);
-      
+
       // Get user credentials for branch ID
       const credentials = await getHeardatCredentials();
       const branchId = credentials.branchId || "0";
-      
+
       console.log('[CreateAppointment] Loading data with branchId:', branchId);
 
       // Load branches, procedures, and audiologists from Heardat API
@@ -125,12 +135,34 @@ export default function CreateAppointmentScreen() {
         address: branch.Address || branch.address,
       }));
 
-      const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => ({
-        id: proc.ProcedureID || proc.id,
-        name: proc.Name || 'Unknown',
-        description: proc.Description || proc.description,
-        duration_minutes: proc.Duration || proc.duration_minutes || 30,
-      }));
+      const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => {
+        let parsedDuration = 30;
+        const rawDuration = proc.Duration || proc.duration_minutes;
+        if (typeof rawDuration === 'number') {
+          parsedDuration = rawDuration;
+        } else if (typeof rawDuration === 'string') {
+          if (rawDuration.includes(':')) {
+            const parts = rawDuration.split(':');
+            const h = parseInt(parts[0], 10) || 0;
+            const m = parseInt(parts[1], 10) || 0;
+            parsedDuration = (h * 60) + m;
+          } else {
+            const n = parseInt(rawDuration, 10);
+            if (!isNaN(n)) parsedDuration = n;
+          }
+        }
+
+        if (!parsedDuration || isNaN(parsedDuration) || parsedDuration <= 0) {
+          parsedDuration = 30;
+        }
+
+        return {
+          id: proc.ProcedureID || proc.id,
+          name: proc.Name || 'Unknown',
+          description: proc.Description || proc.description,
+          duration_minutes: parsedDuration,
+        };
+      });
 
       // Map audiologists from Users endpoint
       const mappedAudiologists: Audiologist[] = (audiologistsRes || []).map((user: any) => ({
@@ -147,7 +179,7 @@ export default function CreateAppointmentScreen() {
       setProcedures(mappedProcedures);
       setExaminers(mappedAudiologists);
       setAssistants(mappedAudiologists); // Use same list for assistants
-      
+
       console.log('[CreateAppointment] Form data mapped and set successfully');
       console.log('[CreateAppointment] Examiners available:', mappedAudiologists.length);
       console.log('[CreateAppointment] Assistants available:', mappedAudiologists.length);
@@ -163,20 +195,20 @@ export default function CreateAppointmentScreen() {
   const loadClients = useCallback(async (searchQuery: string) => {
     console.log('[CreateAppointment] Loading clients with search:', searchQuery);
     setIsLoadingClients(true);
-    
+
     try {
       const credentials = await getHeardatCredentials();
       const branchId = credentials.branchId || "0";
-      
+
       const clientsRes = await getAllPatients(branchId, searchQuery);
-      
+
       const mappedClients: Client[] = (clientsRes || []).map((patient: any) => ({
         id: patient.PatientID || patient.id,
         name: `${patient.FirstName || ''} ${patient.LastName || ''}`.trim() || 'Unknown',
         email: patient.Email || patient.email,
         phone: patient.Cell || patient.phone,
       }));
-      
+
       console.log('[CreateAppointment] Clients loaded:', mappedClients.length);
       setClients(mappedClients);
     } catch (error) {
@@ -216,7 +248,7 @@ export default function CreateAppointmentScreen() {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
-    
+
     if (selectedDate) {
       setDate(selectedDate);
       console.log('[CreateAppointment] Date selected:', selectedDate.toISOString());
@@ -229,7 +261,7 @@ export default function CreateAppointmentScreen() {
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
     }
-    
+
     if (selectedTime) {
       setTime(selectedTime);
       console.log('[CreateAppointment] Time selected:', selectedTime.toISOString());
@@ -237,48 +269,57 @@ export default function CreateAppointmentScreen() {
   };
 
   const doubleBookingAlert = useCallback(() => {
-    Alert.alert(
-      'Double Booking Detected',
-      'This appointment overlaps with an existing appointment. Please choose a different time.',
-      [{ text: 'OK' }]
-    );
+    setErrorMessage('This appointment overlaps with an existing appointment. Please choose a different time.');
   }, []);
 
   const createAppointment = useCallback(async () => {
     const credentials = await getHeardatCredentials();
-    console.log('[CreateAppointment] Creating appointment');
+    console.log('[CreateAppointment] Creating appointment', selectedClient);
 
     try {
       setSubmitting(true);
-
       // Build appointment form data matching Heardat API expectations
+      const endTime = new Date(time.getTime());
+      endTime.setMinutes(endTime.getMinutes() + duration);
+
       const appointmentFormData: Record<string, any> = {
         AppointmentID: "0",
-        DateAppointment: date.toISOString(),
+        DateAppointment: formatLocalDate(date, time),
         Active: "1",
         Deleted: "0",
         BranchID: selectedBranch!.id,
-        Source: "0",
         UserIDAssigned: selectedExaminer!.id,
-        Duration: reformatDurationForAPI(duration),
-        ProceduresID: selectedProcedure!.id,
+        Duration: "1:00",
+        ProcedureID: selectedProcedure!.id,
         ConsoltationID: "0",
-        Type: "Booked Out",
+        Type: selectedAppointmentType?.id || "Appointment",
         UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
         RemindMe: sendReminders ? "1" : "0",
-        DateEndAppointment: date.toISOString(),
+        DateEndAppointment: formatLocalDate(date, endTime),
         UserID: credentials.userId,
         Userkey: credentials.userKey,
         Companykey: credentials.companyKey,
         Sessionkey: credentials.sessionKey,
         CompanyID: credentials.companyId,
-        PatientID: selectedClient!.id,
+        // Appointment and Theater need PatientID
+        PatientID: selectedClient?.id
       };
 
       console.log('[CreateAppointment] Creating appointment with form data:', appointmentFormData);
 
       // Call the createNewAppointment function
       const response = await createNewAppointment(appointmentFormData);
+
+      // Add a check to intercept API-level errors that might return a 200 OK status
+      if (!response ||
+        (typeof response === 'object' && (response.error || response.status === 'error' || response.success === false)) ||
+        (typeof response === 'string' && response.toLowerCase().includes('error'))) {
+
+        throw new Error(
+          (typeof response === 'object' ? (response.message || response.error) : response)
+          || 'The API failed to save the new appointment.'
+        );
+      }
 
       console.log('[CreateAppointment] Appointment created successfully:', response);
       Alert.alert('Success', 'Appointment created successfully', [
@@ -289,12 +330,12 @@ export default function CreateAppointmentScreen() {
       ]);
     } catch (error) {
       console.error('[CreateAppointment] Error creating appointment:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create appointment';
-      Alert.alert('Error', errorMessage);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to create appointment';
+      setErrorMessage(errorMsg);
     } finally {
       setSubmitting(false);
     }
-  }, [date, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router]);
+  }, [date, time, duration, selectedBranch, selectedExaminer, selectedProcedure, selectedAssistant, sendReminders, selectedClient, selectedAppointmentType, router]);
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
@@ -349,7 +390,7 @@ export default function CreateAppointmentScreen() {
         if (response) {
           // Parse response - it might be a string or already parsed
           let calendarData: HeardatAppointment[] = [];
-          
+
           if (typeof response === 'string') {
             const parsed = JSON.parse(response);
             calendarData = parsed.appointments || parsed;
@@ -383,12 +424,12 @@ export default function CreateAppointmentScreen() {
       // Map existing appointments to time ranges
       const existingAppointmentTimes = selectedDayAppointments.map((appointment: HeardatAppointment) => {
         const appointmentTimeStart = moment(appointment.DateAppointment);
-        
+
         // Parse duration (format: "HH:MM")
         const durationParts = appointment.Duration.split(':');
         const hours = parseInt(durationParts[0], 10) || 0;
         const minutes = parseInt(durationParts[1], 10) || 0;
-        
+
         const appointmentTimeEnd = appointmentTimeStart.clone().add(hours, 'hours').add(minutes, 'minutes');
 
         return {
@@ -450,6 +491,18 @@ export default function CreateAppointmentScreen() {
     checkIfDoubleBooking();
   };
 
+  const formatLocalDate = (dateParam: Date, timeParam: Date): string => {
+    console.log('[CreateAppointment] Formatting local date:', dateParam, timeParam);
+    const year = dateParam.getFullYear();
+    const month = (dateParam.getMonth() + 1).toString().padStart(2, '0'); // Months are 0-indexed
+    const day = dateParam.getDate().toString().padStart(2, '0');
+    const hours = timeParam.getHours().toString().padStart(2, '0');
+    const minutes = timeParam.getMinutes().toString().padStart(2, '0');
+    const seconds = timeParam.getSeconds().toString().padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:00`;
+  }
+
   const formatDate = (date: Date): string => {
     const day = date.getDate();
     const month = date.toLocaleString('default', { month: 'short' });
@@ -480,16 +533,16 @@ export default function CreateAppointmentScreen() {
     }
   };
 
-  const reformatDurationForAPI = (totalMinutes: number):string => {
-  const hours = Math.floor(totalMinutes / 60); // Get the whole number of hours
-  const minutes = totalMinutes % 60;           // Get the remainder minutes
+  const reformatDurationForAPI = (totalMinutes: number): string => {
+    const hours = Math.floor(totalMinutes / 60); // Get the whole number of hours
+    const minutes = totalMinutes % 60;           // Get the remainder minutes
 
-  // Optional: Add leading zero to minutes if less than 10
-  const formattedHours = hours.toString().padStart(2, '0');
-  const formattedMinutes = minutes.toString().padStart(2, '0');
+    // Optional: Add leading zero to minutes if less than 10
+    const formattedHours = hours.toString().padStart(2, '0');
+    const formattedMinutes = minutes.toString().padStart(2, '0');
 
-  return `${formattedHours}:${formattedMinutes}`;
-}
+    return `${formattedHours}:${formattedMinutes}`;
+  }
 
   const renderDropdown = (
     label: string,
@@ -576,7 +629,7 @@ export default function CreateAppointmentScreen() {
                   )}
                 </View>
               )}
-              
+
               <ScrollView style={styles.dropdownList}>
                 {isLoadingClients && isClientDropdown ? (
                   <View style={styles.loadingDropdown}>
@@ -653,6 +706,18 @@ export default function CreateAppointmentScreen() {
   const timeDisplay = formatTime(time);
   const durationDisplay = formatDuration(duration);
 
+  const appointmentTypeOptions: DropdownOption[] = [
+    { id: 'Appointment', label: 'Appointment' },
+    { id: 'Meeting', label: 'Meeting' },
+    { id: 'Leave', label: 'Leave' },
+    { id: 'Sickleave', label: 'Sick Leave' },
+    { id: 'Reminder', label: 'Reminder' },
+    { id: 'Admin', label: 'Admin' },
+    { id: 'Personal', label: 'Personal' },
+    { id: 'Unavailable', label: 'Unavailable' },
+    { id: 'Other', label: 'Other' },
+  ];
+
   const clientOptions: DropdownOption[] = clients.map(c => ({ id: c.id, label: c.name }));
   const branchOptions: DropdownOption[] = branches.map(b => ({ id: b.id, label: b.name }));
   const procedureOptions: DropdownOption[] = procedures.map(p => ({ id: p.id, label: p.name }));
@@ -666,6 +731,14 @@ export default function CreateAppointmentScreen() {
     examiners: examinerOptions.length,
     assistants: assistantOptions.length,
   });
+
+  const isFormValid = Boolean(
+    selectedClient &&
+    selectedBranch &&
+    selectedProcedure &&
+    selectedExaminer &&
+    selectedAppointmentType
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -715,6 +788,7 @@ export default function CreateAppointmentScreen() {
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
               console.log('[CreateAppointment] Time picker button tapped');
+              console.log('Time: ', time);
               setShowTimePicker(true);
             }}
           >
@@ -735,6 +809,15 @@ export default function CreateAppointmentScreen() {
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handleTimeChange}
           />
+        )}
+
+        {/* Type Dropdown */}
+        {renderDropdown(
+          'Type',
+          selectedAppointmentType,
+          appointmentTypeOptions,
+          setSelectedAppointmentType,
+          'appointmentType'
         )}
 
         {/* Client Dropdown with Search */}
@@ -923,9 +1006,9 @@ export default function CreateAppointmentScreen() {
 
         {/* Submit Button */}
         <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+          style={[styles.submitButton, (!isFormValid || submitting) && styles.submitButtonDisabled]}
           onPress={handleSubmit}
-          disabled={submitting}
+          disabled={!isFormValid || submitting}
         >
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -936,6 +1019,38 @@ export default function CreateAppointmentScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Error Modal */}
+      <Modal
+        visible={errorMessage !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setErrorMessage(null)}
+      >
+        <TouchableOpacity
+          style={styles.errorModalOverlay}
+          activeOpacity={1}
+          onPress={() => setErrorMessage(null)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.errorModalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.triangle.fill"
+              android_material_icon_name="error"
+              size={40}
+              color="#E74C3C"
+            />
+            <Text style={[styles.errorModalTitle, { color: colors.text }]}>Oops! Something went wrong.</Text>
+            <Text style={[styles.errorModalMessage, { color: colors.text }]}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.errorModalButton}
+              onPress={() => setErrorMessage(null)}
+            >
+              <Text style={styles.errorModalButtonText}>Dismiss</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1120,5 +1235,51 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  errorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorModalContent: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  errorModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorModalMessage: {
+    fontSize: 16,
+    opacity: 0.8,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  errorModalButton: {
+    backgroundColor: '#E74C3C',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  errorModalButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -125,7 +125,7 @@ export default function CreateAppointmentScreen() {
       }));
 
       const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => ({
-        id: proc.ProceduresID || proc.id,
+        id: proc.ProcedureID || proc.id,
         name: proc.Name || 'Unknown',
         description: proc.Description || proc.description,
         duration_minutes: proc.Duration || proc.duration_minutes || 30,
@@ -248,7 +248,7 @@ export default function CreateAppointmentScreen() {
         Source: "0",
         UserIDAssigned: selectedExaminer!.id,
         Duration: reformatDurationForAPI(duration),
-        ProceduresID: selectedProcedure!.id,
+        ProcedureID: selectedProcedure!.id,
         ConsoltationID: "0",
         Type: "Booked Out",
         UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",

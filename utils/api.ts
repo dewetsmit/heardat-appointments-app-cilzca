@@ -205,12 +205,15 @@ export const createNewAppointment = async (
 ): Promise<any> => {
   try {
     console.log('[API] Creating new appointment with data:', appointmentFormData);
-    
+
     // Get current user credentials
     const credentials = await getHeardatCredentials();
     
     if (!credentials.userId) {
       throw new Error("User ID not found. Please sign in again.");
+    }
+    if (!credentials.companyKey) {
+      throw new Error("Company Key not found. Please sign in again.");
     }
     
     // Build params object, filtering out empty values
@@ -255,6 +258,19 @@ export const createNewAppointment = async (
  * @param searchUser - Optional user object with CompanyID, BranchID, UserID
  * @returns Promise with appointments data
  */
+
+// examiner = 8params 
+// assistant = 9params (extra param is Type)
+
+// BranchID	
+// UserIDAssigned	
+// Deleted	
+// DateAppointmentStart	
+// DateAppointmentEnd	
+// Userkey	
+// Companykey	
+// Sessionkey
+
 export const getAppointmentsForUser = async (
   startDate?: string,
   endDate?: string,
@@ -272,10 +288,12 @@ export const getAppointmentsForUser = async (
     
     // Build request parameters
     const params: Record<string, string> = {
-      CompanyID: searchUser?.CompanyID || credentials.companyId || "0",
-      BranchID: searchUser?.BranchID || credentials.branchId || "0",
+      Companykey: credentials.companyKey || "0",
+      CompanyID: credentials.companyId || "0",
+      BranchID: credentials.branchId || "0",
       UserIDAssigned: searchUser?.UserID?.toString() || credentials.userId || "0",
       Deleted: "0",
+      Type: ""
     };
     
     // Add date parameters if provided

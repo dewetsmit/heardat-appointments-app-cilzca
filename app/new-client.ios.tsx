@@ -91,6 +91,7 @@ export default function NewClientScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showMmDatePicker, setShowMmDatePicker] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [branches, setBranches] = useState<DropdownOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
@@ -145,52 +146,66 @@ export default function NewClientScreen() {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${year}/${month}/${day}`;
   };
 
   const isNotMainMember = selectedMainMember?.id === 'No';
+
+  const isFormValid = Boolean(
+    firstName.trim() &&
+    lastName.trim() &&
+    idNumber.trim() &&
+    cellphoneNumber.trim() &&
+    selectedBranch &&
+    selectedMainMember &&
+    (!isNotMainMember || (
+      mmFirstName.trim() &&
+      mmLastName.trim() &&
+      mmIdNumber.trim()
+    ))
+  );
 
   const handleSubmit = async () => {
     console.log('[NewClient] Submit button pressed');
 
     // Validation
     if (!firstName.trim()) {
-      Alert.alert('Validation Error', 'First Name is required');
+      setErrorMessage('First Name is required');
       return;
     }
     if (!lastName.trim()) {
-      Alert.alert('Validation Error', 'Last Name is required');
+      setErrorMessage('Last Name is required');
       return;
     }
     if (!idNumber.trim()) {
-      Alert.alert('Validation Error', 'ID Number is required');
+      setErrorMessage('ID Number is required');
       return;
     }
     if (!cellphoneNumber.trim()) {
-      Alert.alert('Validation Error', 'Cellphone Number is required');
+      setErrorMessage('Cellphone Number is required');
       return;
     }
     if (!selectedBranch) {
-      Alert.alert('Validation Error', 'Branch is required');
+      setErrorMessage('Branch is required');
       return;
     }
     if (!selectedMainMember) {
-      Alert.alert('Validation Error', 'Please specify if client is main member');
+      setErrorMessage('Please specify if client is main member');
       return;
     }
 
     // Validate main member details if not main member
     if (isNotMainMember) {
       if (!mmFirstName.trim()) {
-        Alert.alert('Validation Error', 'Main Member First Name is required');
+        setErrorMessage('Main Member First Name is required');
         return;
       }
       if (!mmLastName.trim()) {
-        Alert.alert('Validation Error', 'Main Member Last Name is required');
+        setErrorMessage('Main Member Last Name is required');
         return;
       }
       if (!mmIdNumber.trim()) {
-        Alert.alert('Validation Error', 'Main Member ID Number is required');
+        setErrorMessage('Main Member ID Number is required');
         return;
       }
     }
@@ -201,8 +216,16 @@ export default function NewClientScreen() {
 
       const credentials = await getHeardatCredentials();
 
-      // Build client data
+      const baseParams = {
+        CompanyID: credentials.companyId || '0',
+        Active: '1',
+        Deleted: '0',
+      };
+
       const clientData: Record<string, string> = {
+        ...baseParams,
+        FirstName: firstName,
+        LastName: lastName,
         Name: firstName,
         Surname: lastName,
         Initials: initials,
@@ -214,37 +237,66 @@ export default function NewClientScreen() {
         Language: selectedLanguage?.id || '',
         Title: selectedTitle?.id || '',
         BranchID: selectedBranch.id,
-        MedicalAid: medicalAid,
+        MedicalAid: medicalAid, 
+        MedicalAidID: '0', 
         MedicalAidPlan: medicalAidPlan,
         MemberNumber: memberNumber,
-        IsMainMember: selectedMainMember.id === 'Yes' ? '1' : '0',
-        CompanyID: credentials.companyId || '0',
-        Active: '1',
-        Deleted: '0',
+        MainMember: '0', 
       };
 
-      // Add main member details if not main member
-      if (isNotMainMember) {
-        clientData.MainMemberName = mmFirstName;
-        clientData.MainMemberSurname = mmLastName;
-        clientData.MainMemberInitials = mmInitials;
-        clientData.MainMemberIDNumber = mmIdNumber;
-        clientData.MainMemberDateOfBirth = formatDate(mmDateOfBirth);
-        clientData.MainMemberCell = mmCellphoneNumber;
-        clientData.MainMemberEmail = mmEmail;
-        clientData.MainMemberGender = mmSelectedGender?.id || '';
-        clientData.MainMemberLanguage = mmSelectedLanguage?.id || '';
-        clientData.MainMemberTitle = mmSelectedTitle?.id || '';
-        clientData.MainMemberBranchID = mmSelectedBranch?.id || '';
-        clientData.MainMemberMedicalAid = mmMedicalAid;
-        clientData.MainMemberMedicalAidPlan = mmMedicalAidPlan;
-        clientData.MainMemberMemberNumber = mmMemberNumber;
+      if (selectedMainMember.id === 'Yes') {
+        clientData.MainMember = '1';
       }
 
       console.log('[NewClient] Client data:', clientData);
 
-      // Call Heardat API to create patient
       const response = await heardatApiCall('Patients', clientData, 'POST');
+
+      if (!response || 
+          (typeof response === 'object' && (response.error || response.status === 'error' || response.success === false)) ||
+          (typeof response === 'string' && response.toLowerCase().includes('error'))) {
+        throw new Error(
+          (typeof response === 'object' ? (response.message || response.error) : response) 
+          || 'The API failed to create the new client.'
+        );
+      }
+
+      if (isNotMainMember) {
+        console.log('[NewClient] User is not main member. Creating Main Member patient record...');
+        const mainMemberData: Record<string, string> = {
+           ...baseParams,
+           FirstName: mmFirstName,
+           LastName: mmLastName,
+           Name: mmFirstName,
+           Surname: mmLastName,
+           Initials: mmInitials,
+           IDNumber: mmIdNumber,
+           DateOfBirth: formatDate(mmDateOfBirth),
+           Cell: mmCellphoneNumber,
+           Email: mmEmail,
+           Gender: mmSelectedGender?.id || '',
+           Language: mmSelectedLanguage?.id || '',
+           Title: mmSelectedTitle?.id || '',
+           BranchID: mmSelectedBranch?.id || selectedBranch.id,
+           MedicalAid: mmMedicalAid,
+           MedicalAidID: '0',
+           MedicalAidPlan: mmMedicalAidPlan,
+           MemberNumber: mmMemberNumber,
+           MainMember: '1',
+        };
+
+        const mmResponse = await heardatApiCall('Patients', mainMemberData, 'POST');
+        
+        if (!mmResponse || 
+            (typeof mmResponse === 'object' && (mmResponse.error || mmResponse.status === 'error' || mmResponse.success === false)) ||
+            (typeof mmResponse === 'string' && mmResponse.toLowerCase().includes('error'))) {
+          throw new Error(
+            (typeof mmResponse === 'object' ? (mmResponse.message || mmResponse.error) : mmResponse) 
+            || 'The API failed to create the main member client.'
+          );
+        }
+        console.log('[NewClient] Main Member created successfully:', mmResponse);
+      }
 
       console.log('[NewClient] Client created successfully:', response);
 
@@ -256,7 +308,8 @@ export default function NewClientScreen() {
       ]);
     } catch (error) {
       console.error('[NewClient] Failed to create client:', error);
-      Alert.alert('Error', 'Failed to create client. Please try again.');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to create client. Please try again.';
+      setErrorMessage(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -432,7 +485,11 @@ export default function NewClientScreen() {
           presentation: 'modal',
         }}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView 
+        style={styles.container} 
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Client Information</Text>
 
@@ -475,9 +532,13 @@ export default function NewClientScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.submitButton, { backgroundColor: theme.colors.primary }]}
+          style={[
+            styles.submitButton, 
+            { backgroundColor: theme.colors.primary },
+            (!isFormValid || loading) && { opacity: 0.5 }
+          ]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={!isFormValid || loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -486,6 +547,38 @@ export default function NewClientScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Error Modal */}
+      <Modal
+        visible={errorMessage !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setErrorMessage(null)}
+      >
+        <TouchableOpacity
+          style={styles.errorModalOverlay}
+          activeOpacity={1}
+          onPress={() => setErrorMessage(null)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.errorModalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.triangle.fill"
+              android_material_icon_name="error"
+              size={40}
+              color="#E74C3C"
+            />
+            <Text style={[styles.errorModalTitle, { color: theme.colors.text }]}>Oops! Something went wrong.</Text>
+            <Text style={[styles.errorModalMessage, { color: theme.colors.text }]}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.errorModalButton}
+              onPress={() => setErrorMessage(null)}
+            >
+              <Text style={styles.errorModalButtonText}>Dismiss</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -593,5 +686,51 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  errorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorModalContent: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  errorModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorModalMessage: {
+    fontSize: 16,
+    opacity: 0.8,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  errorModalButton: {
+    backgroundColor: '#E74C3C',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  errorModalButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
