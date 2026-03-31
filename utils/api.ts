@@ -26,15 +26,15 @@ export const isBackendConfigured = (): boolean => {
  */
 const storage = Platform.OS === "web"
   ? {
-      getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
-      setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
-      deleteItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
-    }
+    getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+    setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
+    deleteItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
+  }
   : {
-      getItem: (key: string) => SecureStore.getItemAsync(key),
-      setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-      deleteItem: (key: string) => SecureStore.deleteItemAsync(key),
-    };
+    getItem: (key: string) => SecureStore.getItemAsync(key),
+    setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+    deleteItem: (key: string) => SecureStore.deleteItemAsync(key),
+  };
 
 /**
  * Get Heardat session credentials from storage
@@ -51,7 +51,7 @@ export const getHeardatCredentials = async (): Promise<{
     const currentUserStr = await storage.getItem("CurrentUser");
     const sessionKey = await storage.getItem("session_key");
     const userKey = await storage.getItem("UserKey");
-    
+
     if (currentUserStr) {
       const currentUser = JSON.parse(currentUserStr);
       return {
@@ -63,7 +63,7 @@ export const getHeardatCredentials = async (): Promise<{
         branchId: currentUser.BranchID || null,
       };
     }
-    
+
     return {
       sessionKey,
       userKey,
@@ -152,11 +152,11 @@ export const heardatApiCall = async <T = any>(
   method: string = 'GET'
 ): Promise<T> => {
   const credentials = await getHeardatCredentials();
-  
+
   if (!credentials.sessionKey || !credentials.userKey) {
     throw new Error("Authentication required. Please sign in.");
   }
-  
+
   // Build query parameters with credentials
   const params = new URLSearchParams({
     Sessionkey: credentials.sessionKey,
@@ -164,10 +164,10 @@ export const heardatApiCall = async <T = any>(
     ...(credentials.companyKey && { Companykey: credentials.companyKey }),
     ...additionalParams,
   });
-  
+
   const url = `${HEARDAT_API_URL}/${endpoint}?${params.toString()}`;
   console.log("[Heardat API] Calling:", endpoint, method);
-  
+
   try {
     const response = await fetch(url, {
       method: method,
@@ -175,13 +175,13 @@ export const heardatApiCall = async <T = any>(
         'Accept': 'application/json',
       },
     });
-    
+
     if (!response.ok) {
       const text = await response.text();
       console.error("[Heardat API] Error response:", response.status, text);
       throw new Error(`Heardat API error: ${response.status}`);
     }
-    
+
     const responseText = await response.text();
     console.log("[Heardat API] Raw response text (first 500 chars):", responseText.substring(0, 500));
     const data = JSON.parse(responseText);
@@ -208,23 +208,23 @@ export const createNewAppointment = async (
 
     // Get current user credentials
     const credentials = await getHeardatCredentials();
-    
+
     if (!credentials.userId) {
       throw new Error("User ID not found. Please sign in again.");
     }
     if (!credentials.companyKey) {
       throw new Error("Company Key not found. Please sign in again.");
     }
-    
+
     // Build params object, filtering out empty values
     const params: Record<string, string> = {};
-    
+
     for (const [key, value] of Object.entries(appointmentFormData)) {
       if (value !== "" && value !== null && value !== undefined) {
         params[key] = value ? value.toString() : "";
       }
     }
-    
+
     // Remove DateEndAppointment if it's 0 or empty
     if (
       Object.prototype.hasOwnProperty.call(params, "DateEndAppointment") &&
@@ -232,15 +232,15 @@ export const createNewAppointment = async (
     ) {
       delete params["DateEndAppointment"];
     }
-    
+
     // Add UserID from current user
     params["UserID"] = credentials.userId;
-    
+
     console.log('[API] Appointment params after processing:', params);
-    
+
     // Call Heardat API with POST method and params as query string
     const data = await heardatApiCall('Appointments', params, 'POST');
-    
+
     console.log('[API] Appointment created successfully');
     return data;
   } catch (error) {
@@ -282,20 +282,19 @@ export const getAppointmentsForUser = async (
 ): Promise<any> => {
   try {
     console.log('[API] Getting appointments for user', { startDate, endDate, searchUser });
-    
+
     // Get current user credentials if no searchUser provided
     const credentials = await getHeardatCredentials();
-    
+
     // Build request parameters
     const params: Record<string, string> = {
       Companykey: credentials.companyKey || "0",
       CompanyID: credentials.companyId || "0",
       BranchID: credentials.branchId || "0",
       UserIDAssigned: searchUser?.UserID?.toString() || credentials.userId || "0",
-      Deleted: "0",
-      Type: ""
+      Deleted: "0"
     };
-    
+
     // Add date parameters if provided
     if (startDate) {
       params.DateAppointmentStart = startDate;
@@ -303,12 +302,12 @@ export const getAppointmentsForUser = async (
     if (endDate) {
       params.DateAppointmentEnd = endDate;
     }
-    
+
     console.log('[API] Appointments request params:', params);
-    
+
     // Call Heardat API
     const data = await heardatApiCall('Appointments', params);
-    
+
     // Parse the response if it's a string
     let parsedData = data;
     if (typeof data === 'string') {
@@ -319,9 +318,9 @@ export const getAppointmentsForUser = async (
         return { appointments: [] };
       }
     }
-    
+
     console.log('[API] Appointments fetched successfully, raw data:', parsedData);
-    
+
     // Return in a consistent format with appointments array
     if (parsedData && parsedData.appointments && Array.isArray(parsedData.appointments)) {
       console.log('[API] Found', parsedData.appointments.length, 'appointments in response');
@@ -374,9 +373,9 @@ export const getAllPatients = async (
 ): Promise<any> => {
   try {
     console.log('[API] Getting all patients', { branchId, search });
-    
+
     const credentials = await getHeardatCredentials();
-    
+
     const params: Record<string, string> = {
       Deleted: "0",
       Active: "1",
@@ -385,13 +384,13 @@ export const getAllPatients = async (
       Search: search,
       CompanyID: credentials.companyId || "0"
     };
-    
+
     console.log('[API] Patients request params:', params);
-    
+
     const data = await heardatApiCall('Patients', params);
-    
+
     console.log('[API] Patients fetched successfully - raw data:', JSON.parse(data).patients);
-    
+
     // The API returns the data directly as an object with a patients array
     // Parse the response if it's a string, otherwise use it directly
     let parsedData = JSON.parse(data).patients;
@@ -412,15 +411,15 @@ export const getAllPatients = async (
 export const getSelectedPatient = async (patientId: string): Promise<any> => {
   try {
     console.log('[API] Getting selected patient', { patientId });
-    
+
     const params: Record<string, string> = {
       PatientsID: patientId,
     };
-    
+
     console.log('[API] Selected patient request params:', params);
-    
+
     const data = await heardatApiCall('Patients', params);
-    
+
     console.log('[API] Selected patient fetched successfully');
     return data;
   } catch (error) {
@@ -443,17 +442,17 @@ export const getBranches = async (): Promise<any> => {
       Active: "1",
       CompanyID: credentials.companyId || "0"
     };
-    
+
     console.log('[API] Branches request params:', params);
-    
+
     const data = await heardatApiCall('Branch', params);
-    
+
     // Parse the response if it's a string
     let parsedData = data;
     if (typeof data === 'string') {
       parsedData = JSON.parse(data);
     }
-    
+
     console.log('[API] Branches fetched successfully');
     return parsedData.branch || [];
   } catch (error) {
@@ -469,24 +468,24 @@ export const getBranches = async (): Promise<any> => {
 export const getUsers = async (): Promise<any> => {
   try {
     console.log('[API] Getting users');
-      const credentials = await getHeardatCredentials();
-      const params = {
-          CompanyID: credentials.companyId || "0",
-          BranchId: "0",
-          Active: "1",
-          Deleted: "0"
-      };
-    
+    const credentials = await getHeardatCredentials();
+    const params = {
+      CompanyID: credentials.companyId || "0",
+      BranchId: "0",
+      Active: "1",
+      Deleted: "0"
+    };
+
     console.log('[API] Users request params:', params);
-    
+
     const data = await heardatApiCall('AppointmentUsers', params);
-    
+
     // Parse the response if it's a string
     let parsedData = data;
     if (typeof data === 'string') {
       parsedData = JSON.parse(data);
     }
-    
+
     console.log('[API] Users fetched successfully', parsedData.appointmentusers.length);
     return parsedData.appointmentusers || [];
   } catch (error) {
@@ -509,17 +508,17 @@ export const getAppointmentProcedures = async (): Promise<any> => {
       Active: "1",
       CompanyID: companyID
     };
-    
+
     console.log('[API] Procedures request params:', params);
-    
+
     const data = await heardatApiCall('Procedures', params);
-    
+
     // Parse the response if it's a string
     let parsedData = data;
     if (typeof data === 'string') {
       parsedData = JSON.parse(data);
     }
-    
+
     console.log('[API] Procedures fetched successfully');
     return parsedData.procedures || [];
   } catch (error) {

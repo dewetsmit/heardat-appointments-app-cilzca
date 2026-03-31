@@ -48,11 +48,6 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
 
   const menuItems = [
     {
-      label: 'New Client',
-      icon: 'person-add',
-      route: '/new-client',
-    },
-    {
       label: 'New Appointment',
       icon: 'event',
       route: '/create-appointment',
@@ -63,9 +58,16 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
       route: '/search-client',
     },
     {
+      label: 'New Client',
+      icon: 'person-add',
+      route: '/new-client',
+      disabled: true,
+    },
+    {
       label: 'Room Planner',
       icon: 'meeting-room',
       route: '/room-planner',
+      disabled: true,
     },
     {
       label: 'Profile',
@@ -143,21 +145,25 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
                     styles.menuItem,
                     {
                       backgroundColor: theme.dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                      opacity: item.disabled ? 0.5 : 1,
                     },
                   ]}
-                  onPress={() => handleMenuItemPress(item.route)}
+                  onPress={() => {
+                    if (!item.disabled) handleMenuItemPress(item.route);
+                  }}
+                  disabled={item.disabled}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
                     <IconSymbol
-                      ios_icon_name={item.icon}
-                      android_material_icon_name={item.icon}
+                      ios_icon_name={item.icon as any}
+                      android_material_icon_name={item.icon as any}
                       size={24}
                       color={theme.colors.primary}
                     />
                   </View>
                   <Text style={[styles.menuItemText, { color: theme.colors.text }]}>
-                    {item.label}
+                    {item.label} {item.disabled && '(Coming Soon)'}
                   </Text>
                   <IconSymbol
                     ios_icon_name="chevron.right"

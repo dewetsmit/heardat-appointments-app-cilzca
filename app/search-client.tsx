@@ -145,6 +145,12 @@ export default function SearchClientScreen() {
           title: 'Search Client',
           headerShown: true,
           presentation: 'modal',
+          headerLeft: () => null,
+          headerRight: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
+              <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+          ),
         }}
       />
 

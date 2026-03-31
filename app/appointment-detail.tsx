@@ -39,7 +39,11 @@ interface AppointmentDetail {
 }
 
 export default function AppointmentDetailScreen() {
-  const { appointmentId } = useLocalSearchParams<{ appointmentId: string }>();
+  const { appointmentId, passedClientName, passedAudiologistName } = useLocalSearchParams<{ 
+    appointmentId: string; 
+    passedClientName?: string;
+    passedAudiologistName?: string;
+  }>();
   const router = useRouter();
   const theme = useTheme();
 
@@ -74,6 +78,18 @@ export default function AppointmentDetailScreen() {
 
       if (Array.isArray(appointments) && appointments.length > 0) {
         const appointmentData = appointments[0];
+        
+        // Merge passedClientName from calendar view if API payload does not have name fields
+        const hasApiName = appointmentData.ClientName || appointmentData.FirstName || appointmentData.LastName;
+        if (!hasApiName && passedClientName) {
+            appointmentData.ClientName = passedClientName;
+        }
+        
+        // Merge passedAudiologistName from calendar view if API payload does not have UserName
+        if (!appointmentData.UserName && passedAudiologistName) {
+            appointmentData.UserName = passedAudiologistName;
+        }
+        
         console.log('[AppointmentDetail] Appointment loaded:', appointmentData);
         setAppointment(appointmentData);
       } else {
@@ -307,7 +323,7 @@ export default function AppointmentDetailScreen() {
               Name
             </Text>
             <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-              {appointment.FirstName} {appointment.LastName} {JSON.stringify(appointment)}
+              {appointment.ClientName || `${appointment.FirstName || ''} ${appointment.LastName || ''}`.trim() || 'Unknown'}
             </Text>
           </View>
 

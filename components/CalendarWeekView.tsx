@@ -21,7 +21,7 @@ interface Appointment {
   Duration?: string;
   Status?: string;
   audiologistId?: string;
-  Type: string;
+  Type?: string;
   audiologistName?: string;
 }
 

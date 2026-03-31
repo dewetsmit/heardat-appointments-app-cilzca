@@ -47,35 +47,20 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: `${theme.colors.primary}20` }]}
-          onPress={() => {
-            console.log('Back button pressed');
-            router.back();
-          }}
-        >
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={theme.colors.primary}
-          />
-        </TouchableOpacity>
-
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
           Profile
         </Text>
 
         <TouchableOpacity
-          style={[styles.menuButton, { backgroundColor: `${theme.colors.primary}20` }]}
+          style={[styles.backButton, { backgroundColor: `${theme.colors.primary}20` }]}
           onPress={() => {
-            console.log('Menu button pressed');
-            setSideNavVisible(true);
+            console.log('Close button pressed');
+            router.back();
           }}
         >
           <IconSymbol
-            ios_icon_name="line.3.horizontal"
-            android_material_icon_name="menu"
+            ios_icon_name="xmark"
+            android_material_icon_name="close"
             size={24}
             color={theme.colors.primary}
           />

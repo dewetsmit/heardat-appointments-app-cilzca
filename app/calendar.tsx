@@ -41,6 +41,9 @@ interface HeardatAppointment {
   UserIDAssigned?: string;
   audiologistId?: string;
   audiologistName?: string;
+  Type?: string;
+  FirstName?: string;
+  LastName?: string;
 }
 
 // Helper function to get audiologist color for dots
@@ -158,10 +161,17 @@ export default function CalendarScreen() {
 
   const handleAppointmentPress = (appointment: any) => {
     console.log('[Calendar] Appointment pressed:', appointment.AppointmentID);
+    
+    const clientName = appointment.ClientName || 
+                      `${appointment.FirstName || ''} ${appointment.LastName || ''}`.trim() || 
+                      '';
+                      
     router.push({
       pathname: '/appointment-detail',
       params: {
         appointmentId: appointment.AppointmentID,
+        passedClientName: clientName,
+        passedAudiologistName: appointment.audiologistName || appointment.UserName || '',
       },
     });
   };

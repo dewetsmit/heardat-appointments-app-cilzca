@@ -691,7 +691,12 @@ export default function CreateAppointmentScreen() {
           options={{
             title: 'Create Appointment',
             headerShown: true,
-            headerBackTitle: 'Back',
+            headerLeft: () => null,
+            headerRight: () => (
+              <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
+                <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={24} color={colors.primary} />
+              </TouchableOpacity>
+            ),
           }}
         />
         <View style={styles.loadingContainer}>
@@ -746,7 +751,12 @@ export default function CreateAppointmentScreen() {
         options={{
           title: 'Create Appointment',
           headerShown: true,
-          headerBackTitle: 'Back',
+          headerLeft: () => null,
+          headerRight: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
+              <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          ),
         }}
       />
 
