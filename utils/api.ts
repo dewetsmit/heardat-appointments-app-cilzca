@@ -289,8 +289,7 @@ export const getAppointmentsForUser = async (
     // Build request parameters
     const params: Record<string, string> = {
       Companykey: credentials.companyKey || "0",
-      CompanyID: credentials.companyId || "0",
-      BranchID: credentials.branchId || "0",
+      BranchID: "0",
       UserIDAssigned: searchUser?.UserID?.toString() || credentials.userId || "0",
       Deleted: "0"
     };
