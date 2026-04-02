@@ -11,8 +11,10 @@ import {
   Modal,
   TextInput,
   Platform,
+  ToastAndroid,
+  DeviceEventEmitter,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -56,6 +58,9 @@ export default function CreateAppointmentScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { token } = useAuth();
+  const params = useLocalSearchParams();
+  const isEditMode = params.editMode === 'true';
+  const editAppointmentId = params.appointmentId as string;
 
   // Form state
   const [date, setDate] = useState(new Date());
@@ -210,6 +215,86 @@ export default function CreateAppointmentScreen() {
     loadFormData();
   }, [loadFormData]);
 
+  // Populate data if in edit mode
+  useEffect(() => {
+    if (params.editMode === 'true' && params.appointmentData && !loading) {
+      try {
+        const apt = JSON.parse(params.appointmentData as string);
+        console.log('[CreateAppointment] Populating form with edit data:', apt);
+
+        // Date
+        if (apt.DateAppointment) {
+          const d = new Date(apt.DateAppointment);
+          if (!isNaN(d.getTime())) setDate(d);
+        }
+        
+        // Time
+        if (apt.TimeAppointment) {
+          const parts = apt.TimeAppointment.split(':');
+          if (parts.length >= 2) {
+             const t = new Date();
+             t.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+             setTime(t);
+          }
+        } else if (apt.DateAppointment) {
+             const d = new Date(apt.DateAppointment);
+             if (!isNaN(d.getTime())) setTime(d);
+        }
+
+        // Duration
+        if (apt.Duration) {
+          const parts = apt.Duration.split(':');
+          if (parts.length >= 2) {
+             const m = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+             setDuration(m);
+          }
+        }
+
+        // Client
+        if (apt.PatientID) {
+          const name = apt.ClientName || 
+                       `${apt.FirstName || ''} ${apt.LastName || ''}`.trim() || 
+                       'Unknown Client';
+          // Make sure we only set it if not already set or different to avoid loop
+          if (!selectedClient || selectedClient.id !== apt.PatientID.toString()) {
+            setSelectedClient({ id: apt.PatientID.toString(), label: name });
+          }
+        }
+
+        // Branch
+        if (apt.BranchID && branches.length > 0) {
+          const branch = branches.find(b => b.id.toString() === apt.BranchID.toString());
+          if (branch && (!selectedBranch || selectedBranch.id !== branch.id)) {
+            setSelectedBranch({ id: branch.id, label: branch.name });
+          }
+        }
+
+        // Procedure
+        if (apt.ProcedureID && procedures.length > 0) {
+          const proc = procedures.find(p => p.id.toString() === apt.ProcedureID.toString());
+          if (proc && (!selectedProcedure || selectedProcedure.id !== proc.id)) {
+            setSelectedProcedure({ id: proc.id, label: proc.name });
+          }
+        }
+
+        // Examiner
+        if (apt.UserIDAssigned && examiners.length > 0) {
+          const exam = examiners.find(e => e.id.toString() === apt.UserIDAssigned.toString());
+          if (exam && (!selectedExaminer || selectedExaminer.id !== exam.id)) {
+            setSelectedExaminer({ id: exam.id, label: exam.full_name });
+          }
+        }
+        
+        // Type
+        // Note: iOS doesn't have selectedAppointmentType right now, check if it does.
+        // It seems iOS version lacks it, but we can safely ignore or add if state exists.
+
+      } catch (err) {
+        console.error('[CreateAppointment] Error parsing appointment data for edit:', err);
+      }
+    }
+  }, [params.editMode, params.appointmentData, loading, branches.length, procedures.length, examiners.length]);
+
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (selectedDate) {
       setDate(selectedDate);
@@ -241,7 +326,7 @@ export default function CreateAppointmentScreen() {
 
       // Build appointment form data matching Heardat API expectations
       const appointmentFormData: Record<string, any> = {
-        AppointmentID: "0",
+        AppointmentID: isEditMode && editAppointmentId ? editAppointmentId : "0",
         DateAppointment: formatDateForAPI(date),
         Active: "1",
         Deleted: "0",
@@ -269,12 +354,25 @@ export default function CreateAppointmentScreen() {
       const response = await createNewAppointment(appointmentFormData);
 
       console.log('[CreateAppointment] Appointment created successfully:', response);
-      Alert.alert('Success', 'Appointment created successfully', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      if (response && response.appointmentsRecord && response.appointmentsRecord.AppointmentID) {
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Appointment created successfully', ToastAndroid.SHORT);
+        } else {
+          Alert.alert('Success', 'Appointment created successfully');
+        }
+        DeviceEventEmitter.emit('refreshCalendar');
+        router.back();
+      } else {
+        Alert.alert('Success', 'Appointment created successfully', [
+          {
+            text: 'OK',
+            onPress: () => {
+              DeviceEventEmitter.emit('refreshCalendar');
+              router.back();
+            },
+          },
+        ]);
+      }
     } catch (error) {
       console.error('[CreateAppointment] Error creating appointment:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create appointment';
@@ -282,7 +380,7 @@ export default function CreateAppointmentScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [date, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router]);
+  }, [date, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router, isEditMode, editAppointmentId]);
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
@@ -434,8 +532,29 @@ export default function CreateAppointmentScreen() {
   }, [date, time, duration, selectedClient, selectedBranch, selectedProcedure, selectedExaminer, createAppointment, doubleBookingAlert]);
 
   const handleSubmit = async () => {
-    console.log('[CreateAppointment] Submit button pressed - checking for double bookings');
-    checkIfDoubleBooking();
+    if (isEditMode) {
+      console.log('[CreateAppointment] Edit mode, bypassing double booking check');
+      if (!selectedClient) {
+        Alert.alert('Validation Error', 'Please select a client');
+        return;
+      }
+      if (!selectedBranch) {
+        Alert.alert('Validation Error', 'Please select a branch');
+        return;
+      }
+      if (!selectedProcedure) {
+        Alert.alert('Validation Error', 'Please select a procedure');
+        return;
+      }
+      if (!selectedExaminer) {
+        Alert.alert('Validation Error', 'Please select an examiner');
+        return;
+      }
+      createAppointment();
+    } else {
+      console.log('[CreateAppointment] Submit button pressed - checking for double bookings');
+      checkIfDoubleBooking();
+    }
   };
 
   const formatDate = (date: Date): string => {
@@ -625,7 +744,7 @@ export default function CreateAppointmentScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <Stack.Screen
           options={{
-            title: 'Create Appointment',
+            title: isEditMode ? 'Edit Appointment' : 'Create Appointment',
             headerShown: true,
             headerLeft: () => null,
             headerRight: () => (
@@ -665,7 +784,7 @@ export default function CreateAppointmentScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <Stack.Screen
         options={{
-          title: 'Create Appointment',
+          title: isEditMode ? 'Edit Appointment' : 'Create Appointment',
           headerShown: true,
           headerLeft: () => null,
           headerRight: () => (
@@ -929,7 +1048,7 @@ export default function CreateAppointmentScreen() {
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.submitButtonText}>Create Appointment</Text>
+            <Text style={styles.submitButtonText}>{isEditMode ? 'Update Appointment' : 'Create Appointment'}</Text>
           )}
         </TouchableOpacity>
 

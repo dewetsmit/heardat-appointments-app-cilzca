@@ -8,6 +8,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Platform,
+  Alert,
+  ToastAndroid,
+  DeviceEventEmitter,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,8 +43,8 @@ interface AppointmentDetail {
 }
 
 export default function AppointmentDetailScreen() {
-  const { appointmentId, passedClientName, passedAudiologistName } = useLocalSearchParams<{ 
-    appointmentId: string; 
+  const { appointmentId, passedClientName, passedAudiologistName } = useLocalSearchParams<{
+    appointmentId: string;
     passedClientName?: string;
     passedAudiologistName?: string;
   }>();
@@ -78,18 +82,18 @@ export default function AppointmentDetailScreen() {
 
       if (Array.isArray(appointments) && appointments.length > 0) {
         const appointmentData = appointments[0];
-        
+
         // Merge passedClientName from calendar view if API payload does not have name fields
         const hasApiName = appointmentData.ClientName || appointmentData.FirstName || appointmentData.LastName;
         if (!hasApiName && passedClientName) {
-            appointmentData.ClientName = passedClientName;
+          appointmentData.ClientName = passedClientName;
         }
-        
+
         // Merge passedAudiologistName from calendar view if API payload does not have UserName
         if (!appointmentData.UserName && passedAudiologistName) {
-            appointmentData.UserName = passedAudiologistName;
+          appointmentData.UserName = passedAudiologistName;
         }
-        
+
         console.log('[AppointmentDetail] Appointment loaded:', appointmentData);
         setAppointment(appointmentData);
       } else {
@@ -141,16 +145,24 @@ export default function AppointmentDetailScreen() {
 
       // Mark appointment as deleted in Heardat API
       const params = {
+        DeleteReason: "",
         AppointmentID: appointment.AppointmentID,
         Deleted: '1',
-        UserID: credentials.userId || '0',
       };
 
       console.log('[AppointmentDetail] Deleting appointment with params:', params);
 
-      await heardatApiCall('Appointments', params, 'PUT');
+      await heardatApiCall('Appointments', params, 'POST');
 
       console.log('[AppointmentDetail] Appointment deleted successfully');
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Appointment deleted successfully', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Success', 'Appointment deleted successfully');
+      }
+
+      DeviceEventEmitter.emit('refreshCalendar');
 
       // Navigate back to calendar
       router.back();

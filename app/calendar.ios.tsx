@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { CalendarWeekView } from '@/components/CalendarWeekView';
@@ -150,6 +151,16 @@ export default function CalendarScreen() {
       loadAppointments();
     }
   }, [loadAppointments, isLoadingAudiologists, selectedAudiologists.length]);
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('refreshCalendar', () => {
+      console.log('[Calendar] Received refresh event');
+      loadAppointments();
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [loadAppointments]);
 
   const handleRefresh = async () => {
     console.log('[Calendar] User triggered refresh');
