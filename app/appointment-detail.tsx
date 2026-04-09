@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import moment from 'moment';
-import { heardatApiCall, getHeardatCredentials } from '@/utils/api';
+import { heardatApiCall, getHeardatCredentials, getAppointmentNotes, getUsers } from '@/utils/api';
 
 interface AppointmentDetail {
   AppointmentID: string;
@@ -33,6 +33,7 @@ interface AppointmentDetail {
   Duration?: string;
   Status?: string;
   Notes?: string;
+  NotesList?: any[];
   Type?: string;
   BranchID?: string;
   BranchName?: string;
@@ -52,12 +53,23 @@ export default function AppointmentDetailScreen() {
   const theme = useTheme();
 
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
+  const [audiologists, setAudiologists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     loadAppointmentDetails();
+    
+    // Listen for updates from edit screen
+    const subscription = DeviceEventEmitter.addListener('refreshAppointmentDetail', () => {
+      console.log('[AppointmentDetail] Refreshing due to update');
+      loadAppointmentDetails();
+    });
+    
+    return () => {
+      subscription.remove();
+    };
   }, [appointmentId]);
 
   const loadAppointmentDetails = async () => {
@@ -92,6 +104,31 @@ export default function AppointmentDetailScreen() {
         // Merge passedAudiologistName from calendar view if API payload does not have UserName
         if (!appointmentData.UserName && passedAudiologistName) {
           appointmentData.UserName = passedAudiologistName;
+        }
+
+        // Fetch users for mapping notes
+        try {
+          const usersRes = await getUsers();
+          setAudiologists(usersRes);
+        } catch (err) {
+          console.error('[AppointmentDetail] Failed to load users', err);
+        }
+
+        // Fetch notes
+        try {
+          const notesRes = await getAppointmentNotes(appointmentId);
+          const parsedNotes = typeof notesRes === 'string' ? JSON.parse(notesRes) : notesRes;
+          console.log('[AppointmentDetail] Notes loaded:', parsedNotes.notes);
+          if (parsedNotes && parsedNotes.notes && Array.isArray(parsedNotes.notes)) {
+            const validNotes = parsedNotes.notes.filter((n: any) => n && (n.Note || n.Notes));
+            appointmentData.NotesList = validNotes;
+              
+            if (validNotes.length > 0) {
+              appointmentData.Notes = validNotes.map((n: any) => n.Note || n.Notes).join('\n\n---\n\n');
+            }
+          }
+        } catch (noteErr) {
+          console.error('[AppointmentDetail] Failed to load notes', noteErr);
         }
 
         console.log('[AppointmentDetail] Appointment loaded:', appointmentData);
@@ -534,16 +571,39 @@ export default function AppointmentDetailScreen() {
         </View>
 
         {/* Notes */}
-        {appointment.Notes && (
-          <View style={[styles.section, { backgroundColor: theme.colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Notes
-            </Text>
+        <View style={[styles.section, { backgroundColor: theme.colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Notes
+          </Text>
+          {appointment.NotesList && appointment.NotesList.length > 0 ? (
+            appointment.NotesList.map((note, index) => {
+              const userIdMatch = note.UserID || note.userid;
+              const user = audiologists.find(u => String(u.UserID) === String(userIdMatch) || String(u.id) === String(userIdMatch));
+              const userName = user ? (user.Name || `${user.FirstName || ''} ${user.LastName || ''}`.trim() || 'Unknown User') : 'Unknown User';
+              const dateString = note.DateCreated || note.CreatedDate || note.timestamp || note.DateEntered;
+              const dateDisplay = dateString ? moment(dateString).format('dddd, MMMM D, YYYY [at] HH:mm') : '';
+              
+              return (
+                <View key={index} style={{ marginBottom: index < appointment.NotesList!.length - 1 ? 16 : 0, paddingBottom: index < appointment.NotesList!.length - 1 ? 16 : 0, borderBottomWidth: index < appointment.NotesList!.length - 1 ? 1 : 0, borderBottomColor: theme.colors.border }}>
+                  <Text style={[styles.notesText, { color: theme.colors.text, marginBottom: 4 }]}>
+                    {note.Note || note.Notes}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: theme.dark ? '#98989D' : '#666' }}>
+                    {userName}{dateDisplay ? ` • ${dateDisplay}` : ''}
+                  </Text>
+                </View>
+              );
+            })
+          ) : appointment.Notes && appointment.Notes.trim() !== '' ? (
             <Text style={[styles.notesText, { color: theme.colors.text }]}>
               {appointment.Notes}
             </Text>
-          </View>
-        )}
+          ) : (
+            <Text style={[styles.notesText, { color: theme.dark ? '#98989D' : '#666', fontStyle: 'italic' }]}>
+              No notes added yet
+            </Text>
+          )}
+        </View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>

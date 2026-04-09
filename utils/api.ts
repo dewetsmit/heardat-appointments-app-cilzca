@@ -250,6 +250,83 @@ export const createNewAppointment = async (
 };
 
 /**
+ * Get appointment notes from Heardat API
+ * Based on the Angular getAppointmentNotes method
+ * 
+ * @param appointmentId - The ID of the appointment
+ * @returns Promise with notes data
+ */
+export const getAppointmentNotes = async (
+  appointmentId: string
+): Promise<any> => {
+  try {
+    console.log('[API] Getting appointment notes for', appointmentId);
+    
+    // Get current user credentials
+    const credentials = await getHeardatCredentials();
+    
+    const params: Record<string, string> = {
+      PrimaryID: appointmentId,
+      Deleted: "0",
+      Table: "Appointments",
+      Type: "Appointments",
+    };
+    
+    // Call Heardat API with GET method
+    const data = await heardatApiCall('Notes', params, 'GET');
+    
+    console.log('[API] Appointment notes fetched successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to get appointment notes:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a new appointment note in Heardat API
+ * Based on the Angular createAppointmentNote method
+ * 
+ * @param notesFormGroup - Note form data object
+ * @returns Promise with created note data
+ */
+export const createAppointmentNote = async (
+  notesFormGroup: Record<string, any>
+): Promise<any> => {
+  try {
+    console.log('[API] Creating new appointment note with data:', notesFormGroup);
+
+    // Get current user credentials
+    const credentials = await getHeardatCredentials();
+
+    if (!credentials.userId) {
+      throw new Error("User ID not found. Please sign in again.");
+    }
+
+    // Build params object, filtering out empty values
+    const params: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(notesFormGroup)) {
+      params[key] = value ? value.toString() : "";
+    }
+
+    // Add UserID from current user
+    params["UserID"] = credentials.userId;
+
+    console.log('[API] Appointment note params after processing:', params);
+
+    // Call Heardat API with POST method and params as query string
+    const data = await heardatApiCall('Notes', params, 'POST');
+
+    console.log('[API] Appointment note created successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to create appointment note:', error);
+    throw error;
+  }
+};
+
+/**
  * Get appointments for a user (current or searched user)
  * Based on the Angular getAppointmentsForUser method
  * 

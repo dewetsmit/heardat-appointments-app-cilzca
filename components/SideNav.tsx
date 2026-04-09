@@ -49,29 +49,34 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
   const menuItems = [
     {
       label: 'New Appointment',
-      icon: 'event',
+      androidIcon: 'event',
+      iosIcon: 'calendar',
       route: '/create-appointment',
     },
     {
       label: 'Search Client',
-      icon: 'search',
+      androidIcon: 'search',
+      iosIcon: 'magnifyingglass',
       route: '/search-client',
     },
     {
       label: 'New Client',
-      icon: 'person-add',
+      androidIcon: 'person-add',
+      iosIcon: 'person.badge.plus',
       route: '/new-client',
       disabled: true,
     },
     {
       label: 'Room Planner',
-      icon: 'meeting-room',
+      androidIcon: 'meeting-room',
+      iosIcon: 'building.2',
       route: '/room-planner',
       disabled: true,
     },
     {
       label: 'Profile',
-      icon: 'person',
+      androidIcon: 'person',
+      iosIcon: 'person.fill',
       route: '/profile',
     }
   ];
@@ -156,8 +161,8 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
                 >
                   <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
                     <IconSymbol
-                      ios_icon_name={item.icon as any}
-                      android_material_icon_name={item.icon as any}
+                      ios_icon_name={item.iosIcon as any}
+                      android_material_icon_name={item.androidIcon as any}
                       size={24}
                       color={theme.colors.primary}
                     />

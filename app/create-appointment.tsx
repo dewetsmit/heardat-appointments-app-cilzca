@@ -13,6 +13,7 @@ import {
   TextInput,
   ToastAndroid,
   DeviceEventEmitter,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +28,8 @@ import {
   heardatApiCall,
   getHeardatCredentials,
   createNewAppointment,
+  createAppointmentNote,
+  getAppointmentNotes,
   formatDateForAPI,
   formatTimeForAPI,
   getUsers,
@@ -83,6 +86,8 @@ export default function CreateAppointmentScreen() {
   const [sendReminders, setSendReminders] = useState(true);
   const [repeatAppointment, setRepeatAppointment] = useState(false);
   const [notes, setNotes] = useState('');
+  const [notesId, setNotesId] = useState('0');
+  const [existingNotes, setExistingNotes] = useState<any[]>([]);
 
   // Client search state
   const [clientSearchQuery, setClientSearchQuery] = useState('');
@@ -259,34 +264,34 @@ export default function CreateAppointmentScreen() {
           const d = new Date(apt.DateAppointment);
           if (!isNaN(d.getTime())) setDate(d);
         }
-        
+
         // Time
         if (apt.TimeAppointment) {
           const parts = apt.TimeAppointment.split(':');
           if (parts.length >= 2) {
-             const t = new Date();
-             t.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
-             setTime(t);
+            const t = new Date();
+            t.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+            setTime(t);
           }
         } else if (apt.DateAppointment) {
-             const d = new Date(apt.DateAppointment);
-             if (!isNaN(d.getTime())) setTime(d);
+          const d = new Date(apt.DateAppointment);
+          if (!isNaN(d.getTime())) setTime(d);
         }
 
         // Duration
         if (apt.Duration) {
           const parts = apt.Duration.split(':');
           if (parts.length >= 2) {
-             const m = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-             setDuration(m);
+            const m = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+            setDuration(m);
           }
         }
 
         // Client
         if (apt.PatientID) {
-          const name = apt.ClientName || 
-                       `${apt.FirstName || ''} ${apt.LastName || ''}`.trim() || 
-                       'Unknown Client';
+          const name = apt.ClientName ||
+            `${apt.FirstName || ''} ${apt.LastName || ''}`.trim() ||
+            'Unknown Client';
           // Make sure we only set it if not already set or different to avoid loop
           if (!selectedClient || selectedClient.id !== apt.PatientID.toString()) {
             setSelectedClient({ id: apt.PatientID.toString(), label: name });
@@ -316,15 +321,15 @@ export default function CreateAppointmentScreen() {
             setSelectedExaminer({ id: exam.id, label: exam.full_name });
           }
         }
-        
+
         // Type
         if (apt.Type && (!selectedAppointmentType || selectedAppointmentType.id !== apt.Type)) {
           setSelectedAppointmentType({ id: apt.Type, label: apt.Type });
         }
 
         // Notes
-        if (apt.Notes && notes !== apt.Notes) {
-          setNotes(apt.Notes);
+        if (apt.NotesList && existingNotes.length === 0) {
+          setExistingNotes(apt.NotesList);
         }
 
       } catch (err) {
@@ -332,6 +337,29 @@ export default function CreateAppointmentScreen() {
       }
     }
   }, [params.editMode, params.appointmentData, loading, branches.length, procedures.length, examiners.length]);
+
+  // Load notes if in edit mode and they weren't in the initial appointment data
+  useEffect(() => {
+    const fetchNotes = async () => {
+      if (isEditMode && editAppointmentId && token) {
+        try {
+          const notesRes = await getAppointmentNotes(editAppointmentId);
+          const parsedNotes = typeof notesRes === 'string' ? JSON.parse(notesRes) : notesRes;
+
+          if (parsedNotes && parsedNotes.notes && Array.isArray(parsedNotes.notes)) {
+            const validNotes = parsedNotes.notes.filter((n: any) => n && (n.Note || n.Notes));
+            setExistingNotes(validNotes);
+          }
+        } catch (error) {
+          console.error('[CreateAppointment] Error loading appointment notes:', error);
+        }
+      }
+    };
+
+    if (isEditMode && editAppointmentId && existingNotes.length === 0) {
+      fetchNotes();
+    }
+  }, [isEditMode, editAppointmentId, token]);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     // On Android, the picker dismisses automatically after selection
@@ -392,7 +420,6 @@ export default function CreateAppointmentScreen() {
         Companykey: credentials.companyKey,
         Sessionkey: credentials.sessionKey,
         CompanyID: credentials.companyId,
-        // Appointment and Theater need PatientID
         PatientID: selectedClient?.id
       };
 
@@ -413,13 +440,57 @@ export default function CreateAppointmentScreen() {
       }
 
       console.log('[CreateAppointment] Appointment created successfully:', response);
-      if (response && response.includes('AppointmentID')) {
+
+      // CREATE APPOINTMENT NOTE
+
+      let finalAppointmentId = isEditMode && editAppointmentId ? editAppointmentId : null;
+      // if (response) {
+      //   try {
+      //     const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
+      //     console.log(parsedResponse);
+
+      //     if (parsedResponse.AppointmentID) {
+      //       finalAppointmentId = parsedResponse.AppointmentID.toString();
+      //     } else if (parsedResponse.appointments && parsedResponse.appointments[0]) {
+      //       finalAppointmentId = parsedResponse.appointments[0].AppointmentID.toString();
+      //     } else {
+      //       const match = String(response).match(/"AppointmentID"\s*:\s*"?(\d+)"?/);
+      //       if (match && match[1]) {
+      //         finalAppointmentId = match[1];
+      //       }
+      //     }
+      //   } catch (e) {
+      //     console.warn('[CreateAppointment] Could not parse AppointmentID from response', e);
+      //   }
+      // }
+
+      if (finalAppointmentId && notes.trim() !== '') {
+        try {
+          console.log('[CreateAppointment] Saving note for appointment:', finalAppointmentId);
+          await createAppointmentNote({
+            NotesID: notesId,
+            Note: notes,
+            Table: "Appointments",
+            Type: "Appointments",
+            PrimaryID: finalAppointmentId,
+            Deleted: "0",
+            Branch: selectedBranch!.id,
+            CompanyID: credentials.companyId,
+            PatientID: selectedClient?.id
+          });
+        } catch (noteError) {
+          console.error('[CreateAppointment] Failed to save appointment note:', noteError);
+        }
+      }
+
+      if (response && String(response).includes('AppointmentID')) {
         if (Platform.OS === 'android') {
           ToastAndroid.show('Appointment created successfully', ToastAndroid.SHORT);
         } else {
           Alert.alert('Success', 'Appointment created successfully');
         }
         DeviceEventEmitter.emit('refreshCalendar');
+        DeviceEventEmitter.emit('refreshAppointmentDetail');
         router.back();
       } else {
         Alert.alert('Success', 'Appointment created successfully', [
@@ -427,6 +498,7 @@ export default function CreateAppointmentScreen() {
             text: 'OK',
             onPress: () => {
               DeviceEventEmitter.emit('refreshCalendar');
+              DeviceEventEmitter.emit('refreshAppointmentDetail');
               router.back();
             },
           },
@@ -439,7 +511,7 @@ export default function CreateAppointmentScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [date, time, duration, selectedBranch, selectedExaminer, selectedProcedure, selectedAssistant, sendReminders, selectedClient, selectedAppointmentType, router, isEditMode, editAppointmentId]);
+  }, [date, time, duration, selectedBranch, selectedExaminer, selectedProcedure, selectedAssistant, sendReminders, selectedClient, selectedAppointmentType, router, isEditMode, editAppointmentId, notes, notesId]);
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
@@ -816,6 +888,7 @@ export default function CreateAppointmentScreen() {
           options={{
             title: isEditMode ? 'Edit Appointment' : 'Create Appointment',
             headerShown: true,
+            gestureEnabled: false,
             headerLeft: () => null,
             headerRight: () => (
               <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
@@ -876,6 +949,7 @@ export default function CreateAppointmentScreen() {
         options={{
           title: isEditMode ? 'Edit Appointment' : 'Create Appointment',
           headerShown: true,
+          gestureEnabled: false,
           headerLeft: () => null,
           headerRight: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
@@ -885,8 +959,13 @@ export default function CreateAppointmentScreen() {
         }}
       />
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Date Picker */}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      >
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} automaticallyAdjustKeyboardInsets={true} keyboardShouldPersistTaps="handled">
+          {/* Date Picker */}
         <View style={styles.fieldContainer}>
           <Text style={[styles.label, { color: colors.text }]}>Date</Text>
           <TouchableOpacity
@@ -943,6 +1022,7 @@ export default function CreateAppointmentScreen() {
             mode="time"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handleTimeChange}
+            minuteInterval={15}
           />
         )}
 
@@ -1129,8 +1209,8 @@ export default function CreateAppointmentScreen() {
         <View style={styles.fieldContainer}>
           <Text style={[styles.label, { color: colors.text }]}>Notes (Optional)</Text>
           <TextInput
-            style={[styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-            placeholder="Add any additional notes..."
+            style={[styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text, marginBottom: existingNotes.length > 0 ? 16 : 0 }]}
+            placeholder={isEditMode ? "Add a new note..." : "Add any additional notes..."}
             placeholderTextColor={colors.text + '80'}
             multiline
             numberOfLines={4}
@@ -1138,6 +1218,33 @@ export default function CreateAppointmentScreen() {
             onChangeText={setNotes}
           />
         </View>
+
+        {/* Existing Notes List */}
+        {existingNotes.length > 0 && (
+          <View style={styles.fieldContainer}>
+            <Text style={[styles.label, { color: colors.text, marginBottom: 12 }]}>Previous Notes</Text>
+            <View style={{ backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+              {existingNotes.map((note, index) => {
+                const userIdMatch = note.UserID || note.userid;
+                const user = examiners.find(u => String(u.id) === String(userIdMatch) || String(u.user_id) === String(userIdMatch));
+                const userName = user ? (user.full_name || 'Unknown User') : 'Unknown User';
+                const dateString = note.DateCreated || note.CreatedDate || note.timestamp || note.DateEntered;
+                const dateDisplay = dateString ? moment(dateString).format('dddd, MMMM D, YYYY [at] HH:mm') : '';
+                
+                return (
+                  <View key={index} style={{ marginBottom: index < existingNotes.length - 1 ? 16 : 0, paddingBottom: index < existingNotes.length - 1 ? 16 : 0, borderBottomWidth: index < existingNotes.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+                    <Text style={{ fontSize: 16, color: colors.text, marginBottom: 4, lineHeight: 24 }}>
+                      {note.Note || note.Notes}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.text + '80' }}>
+                      {userName}{dateDisplay ? ` • ${dateDisplay}` : ''}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Submit Button */}
         <TouchableOpacity
@@ -1153,7 +1260,8 @@ export default function CreateAppointmentScreen() {
         </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Error Modal */}
       <Modal

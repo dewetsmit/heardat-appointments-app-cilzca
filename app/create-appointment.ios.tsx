@@ -13,6 +13,7 @@ import {
   Platform,
   ToastAndroid,
   DeviceEventEmitter,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -746,6 +747,7 @@ export default function CreateAppointmentScreen() {
           options={{
             title: isEditMode ? 'Edit Appointment' : 'Create Appointment',
             headerShown: true,
+            gestureEnabled: false,
             headerLeft: () => null,
             headerRight: () => (
               <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
@@ -786,6 +788,7 @@ export default function CreateAppointmentScreen() {
         options={{
           title: isEditMode ? 'Edit Appointment' : 'Create Appointment',
           headerShown: true,
+          gestureEnabled: false,
           headerLeft: () => null,
           headerRight: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: Platform.OS === 'ios' ? -8 : 0 }}>
@@ -795,8 +798,13 @@ export default function CreateAppointmentScreen() {
         }}
       />
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Date Picker */}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      >
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} automaticallyAdjustKeyboardInsets={true} keyboardShouldPersistTaps="handled">
+          {/* Date Picker */}
         <View style={styles.fieldContainer}>
           <Text style={[styles.label, { color: colors.text }]}>Date</Text>
           <TouchableOpacity
@@ -850,8 +858,9 @@ export default function CreateAppointmentScreen() {
           <DateTimePicker
             value={time}
             mode="time"
-            display="spinner"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handleTimeChange}
+            minuteInterval={15}
           />
         )}
 
@@ -1053,7 +1062,8 @@ export default function CreateAppointmentScreen() {
         </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
