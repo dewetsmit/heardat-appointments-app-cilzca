@@ -41,6 +41,8 @@ interface AppointmentDetail {
   UserIDAssigned?: string;
   UserIDAssignedAssistant?: string;
   AssistantName?: string;
+  AssignedAssistant_FirstName?: string;
+  AssignedAssistant_LastName?: string;
 }
 
 export default function AppointmentDetailScreen() {
@@ -104,6 +106,13 @@ export default function AppointmentDetailScreen() {
         // Merge passedAudiologistName from calendar view if API payload does not have UserName
         if (!appointmentData.UserName && passedAudiologistName) {
           appointmentData.UserName = passedAudiologistName;
+        }
+
+        // Map assistant name
+        const assistantFirstName = appointmentData.AssignedAssistant_FirstName;
+        const assistantLastName = appointmentData.AssignedAssistant_LastName;
+        if (assistantFirstName || assistantLastName) {
+          appointmentData.AssistantName = `${assistantFirstName || ''} ${assistantLastName || ''}`.trim();
         }
 
         // Fetch users for mapping notes
@@ -215,7 +224,14 @@ export default function AppointmentDetailScreen() {
     }
 
     try {
-      const parts = timeString.split(':');
+      let extractedTime = timeString;
+      if (extractedTime.includes('T')) {
+        extractedTime = extractedTime.split('T')[1];
+      } else if (extractedTime.includes(' ')) {
+        extractedTime = extractedTime.split(' ')[1];
+      }
+
+      const parts = extractedTime.split(':');
       if (parts.length >= 2) {
         const hours = parseInt(parts[0], 10);
         const minutes = parts[1];
@@ -313,7 +329,7 @@ export default function AppointmentDetailScreen() {
   }
 
   const dateDisplay = formatDate(appointment.DateAppointment);
-  const timeDisplay = formatTime(appointment.DateAppointment);
+  const timeDisplay = formatTime(appointment.TimeAppointment || appointment.DateAppointment);
   const durationDisplay = formatDuration(appointment.Duration);
 
   return (

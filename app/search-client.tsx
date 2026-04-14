@@ -18,7 +18,9 @@ import { getAllPatients } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Patient {
-  PatientsID: string;
+  PatientsID?: string;
+  PatientID?: string;
+  id?: string;
   Name: string;
   Surname: string;
   Cell?: string;
@@ -113,10 +115,11 @@ export default function SearchClientScreen() {
   }, [searchQuery, patients]);
 
   function handlePatientPress(patient: Patient) {
-    console.log('[SearchClient] Patient selected:', patient.PatientsID, patient.FirstName || patient.Name, patient.LastName || patient.Surname);
+    const targetId = patient.PatientID || patient.PatientsID || patient.id;
+    console.log('[SearchClient] Patient selected:', targetId, patient.FirstName || patient.Name, patient.LastName || patient.Surname);
     router.push({
       pathname: '/patient-detail',
-      params: { patientId: patient.PatientsID },
+      params: { patientId: targetId },
     });
   }
 
@@ -232,14 +235,15 @@ export default function SearchClientScreen() {
               Platform.OS !== 'ios' && styles.listContentWithPadding,
             ]}
           >
-            {filteredPatients.map((patient) => {
+            {filteredPatients.map((patient, index) => {
               const displayName = fullNameDisplay(patient);
               const fileNo = fileNoDisplay(patient);
               const cell = cellDisplay(patient);
               
+              const actualId = patient.PatientID || patient.PatientsID || patient.id || index.toString();
               return (
                 <TouchableOpacity
-                  key={patient.PatientsID}
+                  key={actualId}
                   style={[styles.patientCard, { backgroundColor: theme.colors.card }]}
                   onPress={() => handlePatientPress(patient)}
                 >

@@ -20,6 +20,7 @@
       }
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "versionCode": 99,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/Heardat_icon.png",

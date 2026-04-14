@@ -1,6 +1,6 @@
 
 import Constants from "expo-constants";
-import { Platform } from "react-native";
+import { Platform, DeviceEventEmitter } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 /**
@@ -185,6 +185,18 @@ export const heardatApiCall = async <T = any>(
     const responseText = await response.text();
     console.log("[Heardat API] Raw response text (first 500 chars):", responseText.substring(0, 500));
     const data = JSON.parse(responseText);
+    
+    const stringifiedData = typeof data === 'object' ? JSON.stringify(data).toLowerCase() : String(data).toLowerCase();
+    if (
+      stringifiedData.includes('session expired') ||
+      stringifiedData.includes('invalid credentials') ||
+      (data.Error && data.Error.toLowerCase().includes('session'))
+    ) {
+      console.warn('[Heardat API] Detected Session Expiration in response payload');
+      DeviceEventEmitter.emit('sessionExpired');
+      throw new Error('Session Expired');
+    }
+
     console.log("[Heardat API] Success - parsed data type:", typeof data, "is array:", Array.isArray(data));
     return data;
   } catch (error) {

@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Platform,
+  Linking,
+  Button
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
@@ -17,9 +19,11 @@ import { getSelectedPatient, getUserAppointments } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Patient {
-  PatientsID: string;
-  Name: string;
-  Surname: string;
+  PatientsID?: string;
+  PatientID?: string;
+  id?: string;
+  FirstName: string;
+  LastName: string;
   Cell?: string;
   Home?: string;
   Email?: string;
@@ -66,10 +70,11 @@ export default function PatientDetailScreen() {
       setError(null);
 
       const data = await getSelectedPatient(patientId);
-      console.log('[PatientDetail] Patient API response:', data);
+      const parsedData = JSON.parse(data);
+      console.log('[PatientDetail] Patient API response:', parsedData);
 
-      if (data && data.patients && Array.isArray(data.patients) && data.patients.length > 0) {
-        const patientData = data.patients[0];
+      if (parsedData && parsedData.patients && Array.isArray(parsedData.patients) && parsedData.patients.length > 0) {
+        const patientData = parsedData.patients[0];
         console.log('[PatientDetail] Patient loaded:', patientData);
         setPatient(patientData);
       } else {
@@ -100,8 +105,9 @@ export default function PatientDetailScreen() {
       if (data && data.appointments && Array.isArray(data.appointments)) {
         const patientFullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
         const patientAppointments = data.appointments.filter((apt: Appointment) => {
+          const pid = patient.PatientID || patient.PatientsID || patient.id;
           return (
-            apt.ClientID === patient.PatientsID ||
+            apt.ClientID === pid ||
             apt.ClientName === patientFullName
           );
         });
@@ -230,14 +236,22 @@ export default function PatientDetailScreen() {
     );
   }
 
-  const fullName = `${patient.Name || ''} ${patient.Surname || ''}`.trim();
+  const fullName = `${patient.FirstName || ''} ${patient.LastName || ''}`.trim();
   const displayName = fullName || 'Unknown Patient';
   const cellValue = patient.Cell || '';
   const homeValue = patient.Home || '';
   const emailValue = patient.Email || '';
   const fileNoValue = patient.FileNo || '';
   const dateModifiedValue = patient.DateModified ? formatDate(patient.DateModified) : '';
-  const patientIdValue = patient.PatientsID || '';
+  const patientIdValue = patient.PatientID || patient.PatientsID || patient.id || '';
+
+  const hasClientDetails = Boolean(cellValue || homeValue || emailValue || fileNoValue);
+
+  const callPatient = (phoneNumber: string) => {
+    if (phoneNumber) {
+      Linking.openURL(`tel:${phoneNumber}`);
+    }
+  };
 
   return (
     <SafeAreaView
@@ -281,129 +295,137 @@ export default function PatientDetailScreen() {
               Contact Information
             </Text>
 
-            {cellValue && (
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <IconSymbol
-                    ios_icon_name="phone.fill"
-                    android_material_icon_name="phone"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                    Cell
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {cellValue}
-                  </Text>
-                </View>
-              </View>
-            )}
+            {hasClientDetails ? (
+              <>
+                {cellValue && (
+                  <TouchableOpacity style={styles.detailRow} onPress={() => callPatient(cellValue)}>
+                    <View style={styles.detailIcon}>
+                      <IconSymbol
+                        ios_icon_name="phone.fill"
+                        android_material_icon_name="phone"
+                        size={20}
+                        color={theme.colors.primary}
+                      />
+                    </View>
+                    <View style={styles.detailContent}>
+                      <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        Cellphone
+                      </Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.primary }]}>
+                        {cellValue}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
-            {homeValue && (
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <IconSymbol
-                    ios_icon_name="house.fill"
-                    android_material_icon_name="home"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                    Home
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {homeValue}
-                  </Text>
-                </View>
-              </View>
-            )}
+                {homeValue && (
+                  <TouchableOpacity style={styles.detailRow} onPress={() => callPatient(homeValue)}>
+                    <View style={styles.detailIcon}>
+                      <IconSymbol
+                        ios_icon_name="house.fill"
+                        android_material_icon_name="home"
+                        size={20}
+                        color={theme.colors.primary}
+                      />
+                    </View>
+                    <View style={styles.detailContent}>
+                      <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        Home number
+                      </Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.primary }]}>
+                        {homeValue}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
-            {emailValue && (
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <IconSymbol
-                    ios_icon_name="envelope.fill"
-                    android_material_icon_name="email"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                    Email
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {emailValue}
-                  </Text>
-                </View>
-              </View>
-            )}
+                {emailValue && (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIcon}>
+                      <IconSymbol
+                        ios_icon_name="envelope.fill"
+                        android_material_icon_name="email"
+                        size={20}
+                        color={theme.colors.primary}
+                      />
+                    </View>
+                    <View style={styles.detailContent}>
+                      <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        Email
+                      </Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.text }]}>
+                        {emailValue}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
-            {fileNoValue && (
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <IconSymbol
-                    ios_icon_name="doc.text.fill"
-                    android_material_icon_name="description"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                    File No
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {fileNoValue}
-                  </Text>
-                </View>
-              </View>
-            )}
+                {fileNoValue && (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIcon}>
+                      <IconSymbol
+                        ios_icon_name="doc.text.fill"
+                        android_material_icon_name="description"
+                        size={20}
+                        color={theme.colors.primary}
+                      />
+                    </View>
+                    <View style={styles.detailContent}>
+                      <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        File No
+                      </Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.text }]}>
+                        {fileNoValue}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
-            {dateModifiedValue && (
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <IconSymbol
-                    ios_icon_name="calendar"
-                    android_material_icon_name="calendar-today"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                    Last Modified
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                    {dateModifiedValue}
-                  </Text>
-                </View>
-              </View>
-            )}
+                {dateModifiedValue && (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIcon}>
+                      <IconSymbol
+                        ios_icon_name="calendar"
+                        android_material_icon_name="calendar-today"
+                        size={20}
+                        color={theme.colors.primary}
+                      />
+                    </View>
+                    <View style={styles.detailContent}>
+                      <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                        Last Modified
+                      </Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.text }]}>
+                        {dateModifiedValue}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <IconSymbol
-                  ios_icon_name="number"
-                  android_material_icon_name="tag"
-                  size={20}
-                  color={theme.colors.primary}
-                />
-              </View>
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                  Patient ID
-                </Text>
-                <Text style={[styles.detailValue, { color: theme.colors.text }]}>
-                  {patientIdValue}
-                </Text>
-              </View>
-            </View>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailIcon}>
+                    <IconSymbol
+                      ios_icon_name="number"
+                      android_material_icon_name="tag"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                  <View style={styles.detailContent}>
+                    <Text style={[styles.detailLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
+                      Patient ID
+                    </Text>
+                    <Text style={[styles.detailValue, { color: theme.colors.text }]}>
+                      {patientIdValue}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.detailValue, { color: theme.dark ? '#98989D' : '#666', marginTop: 8 }]}>
+                No contact details
+              </Text>
+            )}
           </View>
         </View>
 
@@ -499,6 +521,13 @@ export default function PatientDetailScreen() {
             </View>
           )}
         </View>
+
+        <TouchableOpacity
+          style={[styles.closeButton, { backgroundColor: theme.colors.primary }]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.closeButtonText}>CLOSE</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -646,5 +675,18 @@ const styles = StyleSheet.create({
   },
   appointmentDetailText: {
     fontSize: 14,
+  },
+  closeButton: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
 });

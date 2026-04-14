@@ -82,6 +82,15 @@ export default function CreateAppointmentScreen() {
   const [selectedExaminer, setSelectedExaminer] = useState<DropdownOption | null>(null);
   const [selectedAssistant, setSelectedAssistant] = useState<DropdownOption | null>(null);
   const [selectedAppointmentType, setSelectedAppointmentType] = useState<DropdownOption | null>({ id: 'Appointment', label: 'Appointment' });
+  const [showUntilDate, setShowUntilDate] = useState(false);
+  const [untilDate, setUntilDate] = useState(() => {
+    const d = new Date();
+    d.setHours(8, 0, 0, 0);
+    return d;
+  });
+  const [showUntilDatePicker, setShowUntilDatePicker] = useState(false);
+  const [isPersonalAppointment, setIsPersonalAppointment] = useState(false);
+  const [personalDescription, setPersonalDescription] = useState('');
   const [duration, setDuration] = useState(30);
   const [sendReminders, setSendReminders] = useState(true);
   const [repeatAppointment, setRepeatAppointment] = useState(false);
@@ -382,6 +391,30 @@ export default function CreateAppointmentScreen() {
     }
 
     if (selectedTime) {
+      // Force 15-minute intervals programmatically
+      let hours = selectedTime.getHours();
+      let minutes = selectedTime.getMinutes();
+      let roundedMinutes = Math.round(minutes / 15) * 15;
+
+      if (roundedMinutes === 60) {
+        hours += 1;
+        roundedMinutes = 0;
+      }
+
+      // Enforce 6:00 to 18:00 bounds
+      if (hours < 6) {
+        hours = 6;
+        roundedMinutes = 0;
+      } else if (hours > 18 || (hours === 18 && roundedMinutes > 0)) {
+        hours = 18;
+        roundedMinutes = 0;
+      }
+
+      selectedTime.setHours(hours);
+      selectedTime.setMinutes(roundedMinutes);
+      selectedTime.setSeconds(0);
+      selectedTime.setMilliseconds(0);
+
       setTime(selectedTime);
       console.log('[CreateAppointment] Time selected:', selectedTime.toISOString());
     }
@@ -409,12 +442,12 @@ export default function CreateAppointmentScreen() {
         BranchID: selectedBranch!.id,
         UserIDAssigned: selectedExaminer!.id,
         Duration: "1:00",
-        ProcedureID: selectedProcedure!.id,
+        ProcedureID: isPersonalAppointment ? personalDescription : (selectedProcedure ? selectedProcedure.id : "0"),
         ConsoltationID: "0",
         Type: selectedAppointmentType?.id || "Appointment",
         UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
         RemindMe: sendReminders ? "1" : "0",
-        DateEndAppointment: formatLocalDate(date, endTime),
+        DateEndAppointment: showUntilDate ? formatLocalDate(untilDate, endTime) : formatLocalDate(date, endTime),
         UserID: credentials.userId,
         Userkey: credentials.userKey,
         Companykey: credentials.companyKey,
@@ -441,28 +474,47 @@ export default function CreateAppointmentScreen() {
 
       console.log('[CreateAppointment] Appointment created successfully:', response);
 
+      // Create appointment on the assistant's calendar
+      if (selectedAssistant) {
+        const assistantFormData = {
+          ...appointmentFormData,
+          UserID: selectedAssistant.id,
+          UserIDAssigned: selectedAssistant.id
+        };
+        try {
+          console.log('[CreateAppointment] Creating secondary appointment for assistant:', assistantFormData);
+          await createNewAppointment(assistantFormData);
+        } catch (assistErr) {
+          console.error('[CreateAppointment] Non-fatal error creating assistant appointment:', assistErr);
+        }
+      }
+
       // CREATE APPOINTMENT NOTE
 
       let finalAppointmentId = isEditMode && editAppointmentId ? editAppointmentId : null;
-      // if (response) {
-      //   try {
-      //     const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
-      //     console.log(parsedResponse);
+      if (response) {
+        try {
+          const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
+          console.log(parsedResponse);
 
-      //     if (parsedResponse.AppointmentID) {
-      //       finalAppointmentId = parsedResponse.AppointmentID.toString();
-      //     } else if (parsedResponse.appointments && parsedResponse.appointments[0]) {
-      //       finalAppointmentId = parsedResponse.appointments[0].AppointmentID.toString();
-      //     } else {
-      //       const match = String(response).match(/"AppointmentID"\s*:\s*"?(\d+)"?/);
-      //       if (match && match[1]) {
-      //         finalAppointmentId = match[1];
-      //       }
-      //     }
-      //   } catch (e) {
-      //     console.warn('[CreateAppointment] Could not parse AppointmentID from response', e);
-      //   }
-      // }
+          if (parsedResponse.AppointmentID) {
+            finalAppointmentId = parsedResponse.AppointmentID.toString();
+          } else if (parsedResponse.appointments && parsedResponse.appointments[0]) {
+            finalAppointmentId = parsedResponse.appointments[0].AppointmentID.toString();
+          } else {
+            const match = String(response).match(/"AppointmentID"\s*:\s*"?(\d+)"?/);
+            if (match && match[1]) {
+              finalAppointmentId = match[1];
+            }
+          }
+        } catch (e) {
+          console.warn('[CreateAppointment] Could not parse AppointmentID from response', e);
+          const match = String(response).match(/"AppointmentID"\s*:\s*"?(\d+)"?/);
+          if (match && match[1]) {
+            finalAppointmentId = match[1];
+          }
+        }
+      }
 
       if (finalAppointmentId && notes.trim() !== '') {
         try {
@@ -517,7 +569,9 @@ export default function CreateAppointmentScreen() {
     console.log('[CreateAppointment] Checking for double bookings');
 
     // Validation
-    if (!selectedClient) {
+    const isAppointment = selectedAppointmentType?.id === 'Appointment';
+
+    if (isAppointment && !selectedClient) {
       Alert.alert('Validation Error', 'Please select a client');
       return;
     }
@@ -525,7 +579,7 @@ export default function CreateAppointmentScreen() {
       Alert.alert('Validation Error', 'Please select a branch');
       return;
     }
-    if (!selectedProcedure) {
+    if (isAppointment && !selectedProcedure) {
       Alert.alert('Validation Error', 'Please select a procedure');
       return;
     }
@@ -665,7 +719,9 @@ export default function CreateAppointmentScreen() {
   const handleSubmit = async () => {
     if (isEditMode) {
       console.log('[CreateAppointment] Edit mode, bypassing double booking check');
-      if (!selectedClient) {
+      const isAppointment = selectedAppointmentType?.id === 'Appointment';
+
+      if (isAppointment && !selectedClient) {
         Alert.alert('Validation Error', 'Please select a client');
         return;
       }
@@ -673,7 +729,7 @@ export default function CreateAppointmentScreen() {
         Alert.alert('Validation Error', 'Please select a branch');
         return;
       }
-      if (!selectedProcedure) {
+      if (isAppointment && !selectedProcedure) {
         Alert.alert('Validation Error', 'Please select a procedure');
         return;
       }
@@ -708,12 +764,9 @@ export default function CreateAppointmentScreen() {
   };
 
   const formatTime = (time: Date): string => {
-    const hours = time.getHours();
-    const minutes = time.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = minutes.toString().padStart(2, '0');
-    return `${displayHours}:${displayMinutes} ${ampm}`;
+    const hours = time.getHours().toString().padStart(2, '0');
+    const minutes = time.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
   };
 
   const formatDuration = (minutes: number): string => {
@@ -961,10 +1014,33 @@ export default function CreateAppointmentScreen() {
 
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        behavior="padding"
+        keyboardVerticalOffset={100}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} automaticallyAdjustKeyboardInsets={true} keyboardShouldPersistTaps="handled">
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          {/* Type Dropdown (First Field) */}
+          {renderDropdown(
+            'Appointment Type',
+            selectedAppointmentType,
+            appointmentTypeOptions,
+            (option) => {
+              setSelectedAppointmentType(option);
+              
+              if (option.id === 'Leave') {
+                setShowUntilDate(true);
+              } else {
+                setShowUntilDate(false);
+              }
+
+              if (option.id === 'Personal') {
+                setIsPersonalAppointment(true);
+              } else {
+                setIsPersonalAppointment(false);
+              }
+            },
+            'appointmentType'
+          )}
+
           {/* Date Picker */}
         <View style={styles.fieldContainer}>
           <Text style={[styles.label, { color: colors.text }]}>Date</Text>
@@ -995,6 +1071,39 @@ export default function CreateAppointmentScreen() {
           />
         )}
 
+        {showUntilDate && (
+          <>
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Until Date</Text>
+              <TouchableOpacity
+                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => setShowUntilDatePicker(true)}
+              >
+                <IconSymbol
+                  ios_icon_name="calendar"
+                  android_material_icon_name="calendar-today"
+                  size={20}
+                  color={colors.text}
+                />
+                <Text style={[styles.inputText, { color: colors.text }]}>{formatDate(untilDate)}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showUntilDatePicker && (
+              <DateTimePicker
+                value={untilDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event: any, selectedDate?: Date) => {
+                  if (Platform.OS === 'android') setShowUntilDatePicker(false);
+                  if (selectedDate) setUntilDate(selectedDate);
+                }}
+                minimumDate={date}
+              />
+            )}
+          </>
+        )}
+
         {/* Time Picker */}
         <View style={styles.fieldContainer}>
           <Text style={[styles.label, { color: colors.text }]}>Time</Text>
@@ -1016,24 +1125,28 @@ export default function CreateAppointmentScreen() {
           </TouchableOpacity>
         </View>
 
-        {showTimePicker && (
-          <DateTimePicker
-            value={time}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleTimeChange}
-            minuteInterval={15}
-          />
-        )}
+        {showTimePicker && (() => {
+          const minTime = new Date(time);
+          minTime.setHours(6, 0, 0, 0);
+          
+          const maxTime = new Date(time);
+          maxTime.setHours(18, 0, 0, 0);
 
-        {/* Type Dropdown */}
-        {renderDropdown(
-          'Type',
-          selectedAppointmentType,
-          appointmentTypeOptions,
-          setSelectedAppointmentType,
-          'appointmentType'
-        )}
+          return (
+            <DateTimePicker
+              value={time}
+              mode="time"
+              display="spinner"
+              onChange={handleTimeChange}
+              minuteInterval={15}
+              is24Hour={true}
+              minimumDate={minTime}
+              maximumDate={maxTime}
+            />
+          );
+        })()}
+
+
 
         {/* Client Dropdown with Search */}
         {renderDropdown(
@@ -1053,20 +1166,33 @@ export default function CreateAppointmentScreen() {
           'branch'
         )}
 
-        {/* Procedure Dropdown */}
-        {renderDropdown(
-          'Procedure',
-          selectedProcedure,
-          procedureOptions,
-          (option) => {
-            setSelectedProcedure(option);
-            const procedure = procedures.find(p => p.id === option.id);
-            if (procedure) {
-              setDuration(procedure.duration_minutes);
-              console.log('[CreateAppointment] Procedure selected, duration set to:', procedure.duration_minutes);
-            }
-          },
-          'procedure'
+        {/* Procedure Dropdown or Description */}
+        {isPersonalAppointment ? (
+          <View style={styles.fieldContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>Appointment description</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              placeholder="Enter description..."
+              placeholderTextColor={colors.text + '80'}
+              value={personalDescription}
+              onChangeText={setPersonalDescription}
+            />
+          </View>
+        ) : (
+          renderDropdown(
+            'Procedure',
+            selectedProcedure,
+            procedureOptions,
+            (option) => {
+              setSelectedProcedure(option);
+              const procedure = procedures.find(p => p.id === option.id);
+              if (procedure) {
+                setDuration(procedure.duration_minutes);
+                console.log('[CreateAppointment] Procedure selected, duration set to:', procedure.duration_minutes);
+              }
+            },
+            'procedure'
+          )
         )}
 
         {/* Examiner Dropdown */}

@@ -1,11 +1,11 @@
 
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert } from "react-native";
+import { useColorScheme, Alert, DeviceEventEmitter } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
@@ -18,8 +18,19 @@ import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppointmentProvider } from "@/contexts/AppointmentContext";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import SessionExpiredModal from "@/components/SessionExpiredModal";
 
 SplashScreen.preventAutoHideAsync();
+
+// Intercept and naturally suppress global Session Expired native alerts,
+// to ensure iOS allows our custom Modal to cleanly mount instead.
+const originalAlert = Alert.alert;
+Alert.alert = (title: string, message?: string, ...args) => {
+  if (message === 'Session Expired' || title === 'Session Expired') {
+    return;
+  }
+  return originalAlert(title, message, ...args);
+};
 
 export const unstable_settings = {
   initialRouteName: "calendar",
@@ -32,6 +43,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const pathname = usePathname();
   const router = useRouter();
+  const [showSessionModal, setShowSessionModal] = useState(false);
 
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -43,6 +55,13 @@ function RootLayoutNav() {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('sessionExpired', () => {
+      setShowSessionModal(true);
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (
@@ -178,6 +197,10 @@ function RootLayoutNav() {
                 />
                 <Stack.Screen name="+not-found" />
               </Stack>
+              <SessionExpiredModal 
+                visible={showSessionModal} 
+                onClose={() => setShowSessionModal(false)} 
+              />
             </GestureHandlerRootView>
           </AppointmentProvider>
         </WidgetProvider>
