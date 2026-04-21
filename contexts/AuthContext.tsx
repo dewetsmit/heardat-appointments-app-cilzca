@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import * as Network from "expo-network";
-import { getUserAppointments, formatDateForAPI } from "@/utils/api";
+import { getUserAppointments, formatDateForAPI, getAppointmentProcedures } from "@/utils/api";
 
 interface User {
   id: string;
@@ -30,6 +30,7 @@ interface AuthContextType {
   token: string | null;
   sessionKey: string | null;
   userKey: string | null;
+  procedures: any[];
   loading: boolean;
   signInWithEmail: (username: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
@@ -80,6 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userKey, setUserKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirectPath, setRedirectPathState] = useState<string | null>(null);
+  const [procedures, setProcedures] = useState<any[]>([]);
+
+  const loadProcedures = async () => {
+    try {
+      const data = await getAppointmentProcedures();
+      setProcedures(data || []);
+    } catch (err) {
+      console.error("Failed to fetch procedures:", err);
+    }
+  };
 
   useEffect(() => {
     fetchUser();
@@ -164,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserKey(storedUserKey);
           setToken(storedSessionKey);
           console.log('User session restored:', userData.full_name || userData.name);
+          
+          await loadProcedures();
         } catch (verifyError) {
           console.log('Session verification failed:', verifyError);
           // Clear expired session
@@ -177,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(null);
           setSessionKey(null);
           setUserKey(null);
+          setProcedures([]);
         }
       } else {
         console.log('No active session found');
@@ -184,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
         setSessionKey(null);
         setUserKey(null);
+        setProcedures([]);
       }
     } catch (error) {
       console.error("Failed to fetch user:", error);
@@ -191,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setSessionKey(null);
       setUserKey(null);
+      setProcedures([]);
     } finally {
       setLoading(false);
     }
@@ -302,6 +318,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Company: accessData.Company,
         Branch: accessData.Branch,
       });
+
+      await loadProcedures();
       
       // Fetch today's appointments for the current user
       console.log('Fetching today\'s appointments...');
@@ -330,6 +348,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setSessionKey(null);
       setUserKey(null);
+      setProcedures([]);
       
       throw new Error(error.message || 'Invalid username or password. Please check your credentials and try again.');
     } finally {
@@ -473,6 +492,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionKey(null);
       setUserKey(null);
       setRedirectPathState(null);
+      setProcedures([]);
       
       console.log('Sign out successful');
     } catch (error) {
@@ -488,6 +508,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         sessionKey,
         userKey,
+        procedures,
         loading,
         signInWithEmail,
         signUpWithEmail,

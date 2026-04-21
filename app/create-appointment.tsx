@@ -439,7 +439,7 @@ export default function CreateAppointmentScreen() {
         DateAppointment: formatLocalDate(date, time),
         Active: "1",
         Deleted: "0",
-        BranchID: selectedBranch!.id,
+        BranchID: selectedBranch?.id || "0",
         UserIDAssigned: selectedExaminer!.id,
         Duration: "1:00",
         ProcedureID: isPersonalAppointment ? personalDescription : (selectedProcedure ? selectedProcedure.id : "0"),
@@ -567,23 +567,27 @@ export default function CreateAppointmentScreen() {
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
-
     // Validation
     const isAppointment = selectedAppointmentType?.id === 'Appointment';
+    const isLeave = selectedAppointmentType?.id === 'Leave';
 
-    if (isAppointment && !selectedClient) {
+    if (isAppointment && !selectedClient && !isLeave) {
+      console.log('Validation Error', 'Please select a client');
       Alert.alert('Validation Error', 'Please select a client');
       return;
     }
-    if (!selectedBranch) {
+    if (!selectedBranch && !isLeave) {
+      console.log('Validation Error', 'Please select a branch');
       Alert.alert('Validation Error', 'Please select a branch');
       return;
     }
-    if (isAppointment && !selectedProcedure) {
+    if (isAppointment && !selectedProcedure && !isLeave) {
+      console.log('Validation Error', 'Please select a procedure');
       Alert.alert('Validation Error', 'Please select a procedure');
       return;
     }
     if (!selectedExaminer) {
+      console.log('Validation Error', 'Please select an examiner');
       Alert.alert('Validation Error', 'Please select an examiner');
       return;
     }
@@ -601,7 +605,7 @@ export default function CreateAppointmentScreen() {
       const searchUser = {
         UserID: selectedExaminer.id,
         CompanyID: credentials.companyId || "0",
-        BranchID: selectedBranch.id,
+        BranchID: selectedBranch?.id || "0",
       };
 
       console.log('[CreateAppointment] Fetching appointments for double booking check:', searchUser);
@@ -1012,8 +1016,8 @@ export default function CreateAppointmentScreen() {
         }}
       />
 
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior="padding"
         keyboardVerticalOffset={100}
       >
@@ -1025,7 +1029,7 @@ export default function CreateAppointmentScreen() {
             appointmentTypeOptions,
             (option) => {
               setSelectedAppointmentType(option);
-              
+
               if (option.id === 'Leave') {
                 setShowUntilDate(true);
               } else {
@@ -1042,350 +1046,350 @@ export default function CreateAppointmentScreen() {
           )}
 
           {/* Date Picker */}
-        <View style={styles.fieldContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>Date</Text>
-          <TouchableOpacity
-            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              console.log('[CreateAppointment] Date picker button tapped');
-              setShowDatePicker(true);
-            }}
-          >
-            <IconSymbol
-              ios_icon_name="calendar"
-              android_material_icon_name="calendar-today"
-              size={20}
-              color={colors.text}
+          <View style={styles.fieldContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>Date</Text>
+            <TouchableOpacity
+              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => {
+                console.log('[CreateAppointment] Date picker button tapped');
+                setShowDatePicker(true);
+              }}
+            >
+              <IconSymbol
+                ios_icon_name="calendar"
+                android_material_icon_name="calendar-today"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.inputText, { color: colors.text }]}>{dateDisplay}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              minimumDate={new Date()}
             />
-            <Text style={[styles.inputText, { color: colors.text }]}>{dateDisplay}</Text>
-          </TouchableOpacity>
-        </View>
+          )}
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-            minimumDate={new Date()}
-          />
-        )}
+          {showUntilDate && (
+            <>
+              <View style={styles.fieldContainer}>
+                <Text style={[styles.label, { color: colors.text }]}>Until Date</Text>
+                <TouchableOpacity
+                  style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setShowUntilDatePicker(true)}
+                >
+                  <IconSymbol
+                    ios_icon_name="calendar"
+                    android_material_icon_name="calendar-today"
+                    size={20}
+                    color={colors.text}
+                  />
+                  <Text style={[styles.inputText, { color: colors.text }]}>{formatDate(untilDate)}</Text>
+                </TouchableOpacity>
+              </View>
 
-        {showUntilDate && (
-          <>
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: colors.text }]}>Until Date</Text>
-              <TouchableOpacity
-                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => setShowUntilDatePicker(true)}
-              >
-                <IconSymbol
-                  ios_icon_name="calendar"
-                  android_material_icon_name="calendar-today"
-                  size={20}
-                  color={colors.text}
+              {showUntilDatePicker && (
+                <DateTimePicker
+                  value={untilDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event: any, selectedDate?: Date) => {
+                    if (Platform.OS === 'android') setShowUntilDatePicker(false);
+                    if (selectedDate) setUntilDate(selectedDate);
+                  }}
+                  minimumDate={date}
                 />
-                <Text style={[styles.inputText, { color: colors.text }]}>{formatDate(untilDate)}</Text>
+              )}
+            </>
+          )}
+
+          {/* Time Picker */}
+          <View style={styles.fieldContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>Time</Text>
+            <TouchableOpacity
+              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => {
+                console.log('[CreateAppointment] Time picker button tapped');
+                console.log('Time: ', time);
+                setShowTimePicker(true);
+              }}
+            >
+              <IconSymbol
+                ios_icon_name="clock"
+                android_material_icon_name="access-time"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.inputText, { color: colors.text }]}>{timeDisplay}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showTimePicker && (() => {
+            const minTime = new Date(time);
+            minTime.setHours(6, 0, 0, 0);
+
+            const maxTime = new Date(time);
+            maxTime.setHours(18, 0, 0, 0);
+
+            return (
+              <DateTimePicker
+                value={time}
+                mode="time"
+                display="spinner"
+                onChange={handleTimeChange}
+                minuteInterval={15}
+                is24Hour={true}
+                minimumDate={minTime}
+                maximumDate={maxTime}
+              />
+            );
+          })()}
+
+
+
+          {/* Client Dropdown with Search */}
+          {renderDropdown(
+            'Client',
+            selectedClient,
+            clientOptions,
+            setSelectedClient,
+            'client'
+          )}
+
+          {/* Branch Dropdown */}
+          {renderDropdown(
+            'Branch',
+            selectedBranch,
+            branchOptions,
+            setSelectedBranch,
+            'branch'
+          )}
+
+          {/* Procedure Dropdown or Description */}
+          {isPersonalAppointment ? (
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Appointment description</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                placeholder="Enter description..."
+                placeholderTextColor={colors.text + '80'}
+                value={personalDescription}
+                onChangeText={setPersonalDescription}
+              />
+            </View>
+          ) : (
+            renderDropdown(
+              'Procedure',
+              selectedProcedure,
+              procedureOptions,
+              (option) => {
+                setSelectedProcedure(option);
+                const procedure = procedures.find(p => p.id === option.id);
+                if (procedure) {
+                  setDuration(procedure.duration_minutes);
+                  console.log('[CreateAppointment] Procedure selected, duration set to:', procedure.duration_minutes);
+                }
+              },
+              'procedure'
+            )
+          )}
+
+          {/* Examiner Dropdown */}
+          {renderDropdown(
+            'Examiner',
+            selectedExaminer,
+            examinerOptions,
+            setSelectedExaminer,
+            'examiner'
+          )}
+
+          {/* Assistant Dropdown */}
+          {renderDropdown(
+            'Assistant (Optional)',
+            selectedAssistant,
+            assistantOptions,
+            setSelectedAssistant,
+            'assistant'
+          )}
+
+          {/* Duration Picker */}
+          <View style={styles.fieldContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>Duration</Text>
+            <TouchableOpacity
+              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => {
+                console.log('[CreateAppointment] Duration picker opened');
+                setShowDurationPicker(true);
+              }}
+            >
+              <IconSymbol
+                ios_icon_name="timer"
+                android_material_icon_name="schedule"
+                size={20}
+                color={colors.text}
+              />
+              <Text style={[styles.inputText, { color: colors.text }]}>{durationDisplay}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Modal
+            visible={showDurationPicker}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowDurationPicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowDurationPicker(false)}
+            >
+              <View style={[styles.dropdownModal, { backgroundColor: colors.card }]}>
+                <ScrollView style={styles.dropdownList}>
+                  {[15, 30, 45, 60, 90, 120].map((mins, index) => {
+                    const durationLabel = formatDuration(mins);
+                    return (
+                      <React.Fragment key={mins}>
+                        <TouchableOpacity
+                          style={styles.dropdownItem}
+                          onPress={() => {
+                            console.log('[CreateAppointment] Duration selected:', mins);
+                            setDuration(mins);
+                            setShowDurationPicker(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownItemText, { color: colors.text }]}>
+                            {durationLabel}
+                          </Text>
+                          {duration === mins && (
+                            <IconSymbol
+                              ios_icon_name="checkmark"
+                              android_material_icon_name="check"
+                              size={20}
+                              color="#4A90E2"
+                            />
+                          )}
+                        </TouchableOpacity>
+                        {index < 5 && (
+                          <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* Send Reminders Toggle */}
+          <View style={styles.fieldContainer}>
+            <View style={styles.toggleRow}>
+              <Text style={[styles.label, { color: colors.text }]}>Send appointment reminders</Text>
+              <TouchableOpacity
+                style={[
+                  styles.toggle,
+                  sendReminders ? styles.toggleActive : styles.toggleInactive,
+                  { borderColor: colors.border }
+                ]}
+                onPress={() => {
+                  console.log('[CreateAppointment] Send reminders toggled:', !sendReminders);
+                  setSendReminders(!sendReminders);
+                }}
+              >
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    sendReminders ? styles.toggleThumbActive : styles.toggleThumbInactive
+                  ]}
+                />
               </TouchableOpacity>
             </View>
+          </View>
 
-            {showUntilDatePicker && (
-              <DateTimePicker
-                value={untilDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(event: any, selectedDate?: Date) => {
-                  if (Platform.OS === 'android') setShowUntilDatePicker(false);
-                  if (selectedDate) setUntilDate(selectedDate);
-                }}
-                minimumDate={date}
-              />
-            )}
-          </>
-        )}
-
-        {/* Time Picker */}
-        <View style={styles.fieldContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>Time</Text>
-          <TouchableOpacity
-            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              console.log('[CreateAppointment] Time picker button tapped');
-              console.log('Time: ', time);
-              setShowTimePicker(true);
-            }}
-          >
-            <IconSymbol
-              ios_icon_name="clock"
-              android_material_icon_name="access-time"
-              size={20}
-              color={colors.text}
-            />
-            <Text style={[styles.inputText, { color: colors.text }]}>{timeDisplay}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {showTimePicker && (() => {
-          const minTime = new Date(time);
-          minTime.setHours(6, 0, 0, 0);
-          
-          const maxTime = new Date(time);
-          maxTime.setHours(18, 0, 0, 0);
-
-          return (
-            <DateTimePicker
-              value={time}
-              mode="time"
-              display="spinner"
-              onChange={handleTimeChange}
-              minuteInterval={15}
-              is24Hour={true}
-              minimumDate={minTime}
-              maximumDate={maxTime}
-            />
-          );
-        })()}
-
-
-
-        {/* Client Dropdown with Search */}
-        {renderDropdown(
-          'Client',
-          selectedClient,
-          clientOptions,
-          setSelectedClient,
-          'client'
-        )}
-
-        {/* Branch Dropdown */}
-        {renderDropdown(
-          'Branch',
-          selectedBranch,
-          branchOptions,
-          setSelectedBranch,
-          'branch'
-        )}
-
-        {/* Procedure Dropdown or Description */}
-        {isPersonalAppointment ? (
+          {/* Repeat Appointment Toggle */}
           <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Appointment description</Text>
+            <View style={styles.toggleRow}>
+              <Text style={[styles.label, { color: colors.text }]}>Repeat appointment</Text>
+              <TouchableOpacity
+                style={[
+                  styles.toggle,
+                  repeatAppointment ? styles.toggleActive : styles.toggleInactive,
+                  { borderColor: colors.border }
+                ]}
+                onPress={() => {
+                  console.log('[CreateAppointment] Repeat appointment toggled:', !repeatAppointment);
+                  setRepeatAppointment(!repeatAppointment);
+                }}
+              >
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    repeatAppointment ? styles.toggleThumbActive : styles.toggleThumbInactive
+                  ]}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Notes */}
+          <View style={styles.fieldContainer}>
+            <Text style={[styles.label, { color: colors.text }]}>Notes (Optional)</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              placeholder="Enter description..."
+              style={[styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text, marginBottom: existingNotes.length > 0 ? 16 : 0 }]}
+              placeholder={isEditMode ? "Add a new note..." : "Add any additional notes..."}
               placeholderTextColor={colors.text + '80'}
-              value={personalDescription}
-              onChangeText={setPersonalDescription}
+              multiline
+              numberOfLines={4}
+              value={notes}
+              onChangeText={setNotes}
             />
           </View>
-        ) : (
-          renderDropdown(
-            'Procedure',
-            selectedProcedure,
-            procedureOptions,
-            (option) => {
-              setSelectedProcedure(option);
-              const procedure = procedures.find(p => p.id === option.id);
-              if (procedure) {
-                setDuration(procedure.duration_minutes);
-                console.log('[CreateAppointment] Procedure selected, duration set to:', procedure.duration_minutes);
-              }
-            },
-            'procedure'
-          )
-        )}
 
-        {/* Examiner Dropdown */}
-        {renderDropdown(
-          'Examiner',
-          selectedExaminer,
-          examinerOptions,
-          setSelectedExaminer,
-          'examiner'
-        )}
+          {/* Existing Notes List */}
+          {existingNotes.length > 0 && (
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: colors.text, marginBottom: 12 }]}>Previous Notes</Text>
+              <View style={{ backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                {existingNotes.map((note, index) => {
+                  const userIdMatch = note.UserID || note.userid;
+                  const user = examiners.find(u => String(u.id) === String(userIdMatch) || String(u.user_id) === String(userIdMatch));
+                  const userName = user ? (user.full_name || 'Unknown User') : 'Unknown User';
+                  const dateString = note.DateCreated || note.CreatedDate || note.timestamp || note.DateEntered;
+                  const dateDisplay = dateString ? moment(dateString).format('dddd, MMMM D, YYYY [at] HH:mm') : '';
 
-        {/* Assistant Dropdown */}
-        {renderDropdown(
-          'Assistant (Optional)',
-          selectedAssistant,
-          assistantOptions,
-          setSelectedAssistant,
-          'assistant'
-        )}
-
-        {/* Duration Picker */}
-        <View style={styles.fieldContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>Duration</Text>
-          <TouchableOpacity
-            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              console.log('[CreateAppointment] Duration picker opened');
-              setShowDurationPicker(true);
-            }}
-          >
-            <IconSymbol
-              ios_icon_name="timer"
-              android_material_icon_name="schedule"
-              size={20}
-              color={colors.text}
-            />
-            <Text style={[styles.inputText, { color: colors.text }]}>{durationDisplay}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Modal
-          visible={showDurationPicker}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowDurationPicker(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowDurationPicker(false)}
-          >
-            <View style={[styles.dropdownModal, { backgroundColor: colors.card }]}>
-              <ScrollView style={styles.dropdownList}>
-                {[15, 30, 45, 60, 90, 120].map((mins, index) => {
-                  const durationLabel = formatDuration(mins);
                   return (
-                    <React.Fragment key={mins}>
-                      <TouchableOpacity
-                        style={styles.dropdownItem}
-                        onPress={() => {
-                          console.log('[CreateAppointment] Duration selected:', mins);
-                          setDuration(mins);
-                          setShowDurationPicker(false);
-                        }}
-                      >
-                        <Text style={[styles.dropdownItemText, { color: colors.text }]}>
-                          {durationLabel}
-                        </Text>
-                        {duration === mins && (
-                          <IconSymbol
-                            ios_icon_name="checkmark"
-                            android_material_icon_name="check"
-                            size={20}
-                            color="#4A90E2"
-                          />
-                        )}
-                      </TouchableOpacity>
-                      {index < 5 && (
-                        <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
-                      )}
-                    </React.Fragment>
+                    <View key={index} style={{ marginBottom: index < existingNotes.length - 1 ? 16 : 0, paddingBottom: index < existingNotes.length - 1 ? 16 : 0, borderBottomWidth: index < existingNotes.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+                      <Text style={{ fontSize: 16, color: colors.text, marginBottom: 4, lineHeight: 24 }}>
+                        {note.Note || note.Notes}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.text + '80' }}>
+                        {userName}{dateDisplay ? ` • ${dateDisplay}` : ''}
+                      </Text>
+                    </View>
                   );
                 })}
-              </ScrollView>
+              </View>
             </View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Send Reminders Toggle */}
-        <View style={styles.fieldContainer}>
-          <View style={styles.toggleRow}>
-            <Text style={[styles.label, { color: colors.text }]}>Send appointment reminders</Text>
-            <TouchableOpacity
-              style={[
-                styles.toggle,
-                sendReminders ? styles.toggleActive : styles.toggleInactive,
-                { borderColor: colors.border }
-              ]}
-              onPress={() => {
-                console.log('[CreateAppointment] Send reminders toggled:', !sendReminders);
-                setSendReminders(!sendReminders);
-              }}
-            >
-              <View
-                style={[
-                  styles.toggleThumb,
-                  sendReminders ? styles.toggleThumbActive : styles.toggleThumbInactive
-                ]}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Repeat Appointment Toggle */}
-        <View style={styles.fieldContainer}>
-          <View style={styles.toggleRow}>
-            <Text style={[styles.label, { color: colors.text }]}>Repeat appointment</Text>
-            <TouchableOpacity
-              style={[
-                styles.toggle,
-                repeatAppointment ? styles.toggleActive : styles.toggleInactive,
-                { borderColor: colors.border }
-              ]}
-              onPress={() => {
-                console.log('[CreateAppointment] Repeat appointment toggled:', !repeatAppointment);
-                setRepeatAppointment(!repeatAppointment);
-              }}
-            >
-              <View
-                style={[
-                  styles.toggleThumb,
-                  repeatAppointment ? styles.toggleThumbActive : styles.toggleThumbInactive
-                ]}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Notes */}
-        <View style={styles.fieldContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>Notes (Optional)</Text>
-          <TextInput
-            style={[styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text, marginBottom: existingNotes.length > 0 ? 16 : 0 }]}
-            placeholder={isEditMode ? "Add a new note..." : "Add any additional notes..."}
-            placeholderTextColor={colors.text + '80'}
-            multiline
-            numberOfLines={4}
-            value={notes}
-            onChangeText={setNotes}
-          />
-        </View>
-
-        {/* Existing Notes List */}
-        {existingNotes.length > 0 && (
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: colors.text, marginBottom: 12 }]}>Previous Notes</Text>
-            <View style={{ backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-              {existingNotes.map((note, index) => {
-                const userIdMatch = note.UserID || note.userid;
-                const user = examiners.find(u => String(u.id) === String(userIdMatch) || String(u.user_id) === String(userIdMatch));
-                const userName = user ? (user.full_name || 'Unknown User') : 'Unknown User';
-                const dateString = note.DateCreated || note.CreatedDate || note.timestamp || note.DateEntered;
-                const dateDisplay = dateString ? moment(dateString).format('dddd, MMMM D, YYYY [at] HH:mm') : '';
-                
-                return (
-                  <View key={index} style={{ marginBottom: index < existingNotes.length - 1 ? 16 : 0, paddingBottom: index < existingNotes.length - 1 ? 16 : 0, borderBottomWidth: index < existingNotes.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
-                    <Text style={{ fontSize: 16, color: colors.text, marginBottom: 4, lineHeight: 24 }}>
-                      {note.Note || note.Notes}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: colors.text + '80' }}>
-                      {userName}{dateDisplay ? ` • ${dateDisplay}` : ''}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitButtonText}>{isEditMode ? 'Update Appointment' : 'Create Appointment'}</Text>
           )}
-        </TouchableOpacity>
 
-        <View style={styles.bottomSpacer} />
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>{isEditMode ? 'Update Appointment' : 'Create Appointment'}</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
 

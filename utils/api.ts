@@ -185,7 +185,7 @@ export const heardatApiCall = async <T = any>(
     const responseText = await response.text();
     console.log("[Heardat API] Raw response text (first 500 chars):", responseText.substring(0, 500));
     const data = JSON.parse(responseText);
-    
+
     const stringifiedData = typeof data === 'object' ? JSON.stringify(data).toLowerCase() : String(data).toLowerCase();
     if (
       stringifiedData.includes('session expired') ||
@@ -273,20 +273,20 @@ export const getAppointmentNotes = async (
 ): Promise<any> => {
   try {
     console.log('[API] Getting appointment notes for', appointmentId);
-    
+
     // Get current user credentials
     const credentials = await getHeardatCredentials();
-    
+
     const params: Record<string, string> = {
       PrimaryID: appointmentId,
       Deleted: "0",
       Table: "Appointments",
       Type: "Appointments",
     };
-    
+
     // Call Heardat API with GET method
     const data = await heardatApiCall('Notes', params, 'GET');
-    
+
     console.log('[API] Appointment notes fetched successfully');
     return data;
   } catch (error) {
@@ -481,7 +481,7 @@ export const getAllPatients = async (
 
     // The API returns the data directly as an object with a patients array
     // Parse the response if it's a string, otherwise use it directly
-    let parsedData = JSON.parse(data).patients;
+    let parsedData = [{ FirstName: "None", PatientID: "0" }, ...JSON.parse(data).patients];
     // Return the full response object which should have a patients array
     return parsedData;
   } catch (error) {

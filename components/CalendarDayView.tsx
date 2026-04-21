@@ -23,8 +23,8 @@ interface Appointment {
   audiologistId?: string;
   Type?: string;
   audiologistName?: string;
-  FirstName?:string;
-  LastName?:string;
+  FirstName?: string;
+  LastName?: string;
 }
 
 interface CalendarDayViewProps {
@@ -59,14 +59,14 @@ const AUDIOLOGIST_COLORS = [
 // Helper to parse duration string (HH:MM:SS) to minutes
 function parseDurationToMinutes(duration: string | undefined): number {
   if (!duration) return 30;
-  
+
   const parts = duration.split(':');
   if (parts.length >= 2) {
     const hours = parseInt(parts[0], 10) || 0;
     const minutes = parseInt(parts[1], 10) || 0;
     return hours * 60 + minutes;
   }
-  
+
   return 30;
 }
 
@@ -76,13 +76,13 @@ function isFullDayEvent(duration: string | undefined): boolean {
   return minutes > 480; // 8 hours = 480 minutes
 }
 
-export function CalendarDayView({ 
-  selectedDate, 
-  appointments, 
-  selectedAudiologists, 
+export function CalendarDayView({
+  selectedDate,
+  appointments,
+  selectedAudiologists,
   onAppointmentPress,
   onSwipeLeft,
-  onSwipeRight 
+  onSwipeRight
 }: CalendarDayViewProps) {
   const theme = useTheme();
   const [slotInterval, setSlotInterval] = useState(60); // Current interval in minutes
@@ -105,7 +105,7 @@ export function CalendarDayView({
       for (let minute = 0; minute < 60; minute += slotInterval) {
         // Don't add slots after 7pm
         if (hour === END_HOUR && minute > 0) break;
-        
+
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         slots.push({
           time: timeString,
@@ -113,7 +113,7 @@ export function CalendarDayView({
         });
       }
     }
-    
+
     return slots;
   };
 
@@ -134,16 +134,16 @@ export function CalendarDayView({
 
   const getAppointmentPosition = (appointment: Appointment) => {
     const DateStringToDate = new Date(appointment.DateAppointment);
-    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
-    
+    const time = { hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes() };
+
     // Calculate minutes from START_HOUR (6am)
     const totalMinutesFromStart = (time.hour - START_HOUR) * 60 + time.minute;
     const pixelsPerMinute = slotHeight / slotInterval;
-    
+
     const top = totalMinutesFromStart * pixelsPerMinute;
     const durationMinutes = parseDurationToMinutes(appointment.Duration);
     const height = durationMinutes * pixelsPerMinute;
-    
+
     return { top, height };
   };
 
@@ -151,7 +151,7 @@ export function CalendarDayView({
   const currentTime = new Date();
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
-  
+
   // Calculate current time position relative to START_HOUR
   const currentMinutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
   const pixelsPerMinute = slotHeight / slotInterval;
@@ -177,7 +177,7 @@ export function CalendarDayView({
   // Group appointments by audiologist
   const appointmentsByAudiologist: { [key: string]: Appointment[] } = {};
   const fullDayEventsByAudiologist: { [key: string]: Appointment[] } = {};
-  
+
   selectedAudiologists.forEach((audiologist) => {
     appointmentsByAudiologist[audiologist.user_id] = regularAppointments.filter(
       (apt) => apt.audiologistId === audiologist.user_id
@@ -274,7 +274,7 @@ export function CalendarDayView({
             {selectedAudiologists.map((audiologist, index) => {
               const color = getAudiologistColor(index);
               const events = fullDayEventsByAudiologist[audiologist.user_id] || [];
-              
+
               return (
                 <React.Fragment key={audiologist.user_id}>
                   {events.map((event) => {
@@ -318,7 +318,7 @@ export function CalendarDayView({
         {selectedAudiologists.map((audiologist, index) => {
           const color = getAudiologistColor(index);
           const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
-          
+
           return (
             <TouchableOpacity
               key={audiologist.user_id}
@@ -398,7 +398,7 @@ export function CalendarDayView({
                     console.log('[APPOINTMENT]', appointment);
                     const position = getAppointmentPosition(appointment);
                     const DateStringToDate = new Date(appointment.DateAppointment);
-                    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
+                    const time = { hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes() };
                     const timeText = formatTimeDisplay(time.hour, time.minute);
 
                     return (
@@ -418,8 +418,8 @@ export function CalendarDayView({
                         <Text style={styles.appointmentTime} numberOfLines={1}>
                           {timeText}
                         </Text>
-                        <Text style={styles.appointmentClient} numberOfLines={1}>
-                          {appointment.FirstName}
+                        <Text style={styles.appointmentClient} numberOfLines={2}>
+                          {appointment.FirstName} {appointment.LastName}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -523,13 +523,13 @@ export function CalendarDayView({
               {SLOT_INTERVALS.map((interval) => {
                 const isSelected = interval === slotInterval;
                 const intervalLabel = `${interval} minutes`;
-                
+
                 return (
                   <TouchableOpacity
                     key={interval}
                     style={[
                       styles.intervalOption,
-                      { 
+                      {
                         backgroundColor: isSelected ? `${theme.colors.primary}20` : 'transparent',
                         borderColor: isSelected ? theme.colors.primary : (theme.dark ? '#2C2C2E' : '#E5E5EA'),
                       }
@@ -546,7 +546,7 @@ export function CalendarDayView({
                       />
                       <Text style={[
                         styles.intervalOptionText,
-                        { 
+                        {
                           color: isSelected ? theme.colors.primary : theme.colors.text,
                           fontWeight: isSelected ? '700' : '600',
                         }

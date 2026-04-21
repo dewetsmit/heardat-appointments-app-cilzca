@@ -19,6 +19,7 @@ import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import moment from 'moment';
 import { heardatApiCall, getHeardatCredentials, getAppointmentNotes, getUsers } from '@/utils/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AppointmentDetail {
   AppointmentID: string;
@@ -38,6 +39,7 @@ interface AppointmentDetail {
   BranchID?: string;
   BranchName?: string;
   ProcedureName?: string;
+  ProcedureID?: string;
   UserIDAssigned?: string;
   UserIDAssignedAssistant?: string;
   AssistantName?: string;
@@ -53,6 +55,7 @@ export default function AppointmentDetailScreen() {
   }>();
   const router = useRouter();
   const theme = useTheme();
+  const { procedures } = useAuth();
 
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
   const [audiologists, setAudiologists] = useState<any[]>([]);
@@ -62,13 +65,13 @@ export default function AppointmentDetailScreen() {
 
   useEffect(() => {
     loadAppointmentDetails();
-    
+
     // Listen for updates from edit screen
     const subscription = DeviceEventEmitter.addListener('refreshAppointmentDetail', () => {
       console.log('[AppointmentDetail] Refreshing due to update');
       loadAppointmentDetails();
     });
-    
+
     return () => {
       subscription.remove();
     };
@@ -131,13 +134,24 @@ export default function AppointmentDetailScreen() {
           if (parsedNotes && parsedNotes.notes && Array.isArray(parsedNotes.notes)) {
             const validNotes = parsedNotes.notes.filter((n: any) => n && (n.Note || n.Notes));
             appointmentData.NotesList = validNotes;
-              
+
             if (validNotes.length > 0) {
               appointmentData.Notes = validNotes.map((n: any) => n.Note || n.Notes).join('\n\n---\n\n');
             }
           }
         } catch (noteErr) {
           console.error('[AppointmentDetail] Failed to load notes', noteErr);
+        }
+
+        // Map ProcedureName from context procedures
+        if (appointmentData.ProcedureID && procedures && procedures.length > 0) {
+          const procedure = procedures.find((p: any) => 
+            String(p.ProcedureID) === String(appointmentData.ProcedureID) || 
+            String(p.id) === String(appointmentData.ProcedureID)
+          );
+          if (procedure) {
+            appointmentData.ProcedureName = procedure.Name || procedure.name || procedure.ProcedureName || appointmentData.ProcedureName;
+          }
         }
 
         console.log('[AppointmentDetail] Appointment loaded:', appointmentData);
@@ -546,7 +560,7 @@ export default function AppointmentDetailScreen() {
                 Assistant
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                {appointment.AssistantName}
+                {JSON.stringify(appointment)}
               </Text>
             </View>
           )}
@@ -568,7 +582,7 @@ export default function AppointmentDetailScreen() {
             </View>
           )}
 
-          {appointment.ProcedureName && (
+          {appointment.ProcedureID && (
             <View style={styles.infoRow}>
               <IconSymbol
                 ios_icon_name="list.bullet"
@@ -598,7 +612,7 @@ export default function AppointmentDetailScreen() {
               const userName = user ? (user.Name || `${user.FirstName || ''} ${user.LastName || ''}`.trim() || 'Unknown User') : 'Unknown User';
               const dateString = note.DateCreated || note.CreatedDate || note.timestamp || note.DateEntered;
               const dateDisplay = dateString ? moment(dateString).format('dddd, MMMM D, YYYY [at] HH:mm') : '';
-              
+
               return (
                 <View key={index} style={{ marginBottom: index < appointment.NotesList!.length - 1 ? 16 : 0, paddingBottom: index < appointment.NotesList!.length - 1 ? 16 : 0, borderBottomWidth: index < appointment.NotesList!.length - 1 ? 1 : 0, borderBottomColor: theme.colors.border }}>
                   <Text style={[styles.notesText, { color: theme.colors.text, marginBottom: 4 }]}>
