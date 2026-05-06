@@ -82,14 +82,15 @@ export default function CreateAppointmentScreen() {
   const [selectedExaminer, setSelectedExaminer] = useState<DropdownOption | null>(null);
   const [selectedAssistant, setSelectedAssistant] = useState<DropdownOption | null>(null);
   const [selectedAppointmentType, setSelectedAppointmentType] = useState<DropdownOption | null>({ id: 'Appointment', label: 'Appointment' });
-  const [showUntilDate, setShowUntilDate] = useState(false);
+  const selectedTypeId = selectedAppointmentType?.id || 'Appointment';
+  const isPatientInfoRequired = selectedTypeId === 'Appointment' || selectedTypeId === 'Theater';
+  const showUntilDate = ['Leave', 'Sick leave', 'Training', 'Unavailable', 'Personal', 'Travel time'].includes(selectedTypeId);
   const [untilDate, setUntilDate] = useState(() => {
     const d = new Date();
     d.setHours(8, 0, 0, 0);
     return d;
   });
   const [showUntilDatePicker, setShowUntilDatePicker] = useState(false);
-  const [isPersonalAppointment, setIsPersonalAppointment] = useState(false);
   const [personalDescription, setPersonalDescription] = useState('');
   const [duration, setDuration] = useState(30);
   const [sendReminders, setSendReminders] = useState(true);
@@ -442,7 +443,7 @@ export default function CreateAppointmentScreen() {
         BranchID: selectedBranch?.id || "0",
         UserIDAssigned: selectedExaminer!.id,
         Duration: "1:00",
-        ProcedureID: isPersonalAppointment ? personalDescription : (selectedProcedure ? selectedProcedure.id : "0"),
+        ProcedureID: !isPatientInfoRequired ? personalDescription : (selectedProcedure ? selectedProcedure.id : "0"),
         ConsoltationID: "0",
         Type: selectedAppointmentType?.id || "Appointment",
         UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
@@ -453,7 +454,7 @@ export default function CreateAppointmentScreen() {
         Companykey: credentials.companyKey,
         Sessionkey: credentials.sessionKey,
         CompanyID: credentials.companyId,
-        PatientID: selectedClient?.id
+        PatientID: isPatientInfoRequired ? selectedClient?.id : "0"
       };
 
       console.log('[CreateAppointment] Creating appointment with form data:', appointmentFormData);
@@ -568,20 +569,17 @@ export default function CreateAppointmentScreen() {
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
     // Validation
-    const isAppointment = selectedAppointmentType?.id === 'Appointment';
-    const isLeave = selectedAppointmentType?.id === 'Leave';
-
-    if (isAppointment && !selectedClient && !isLeave) {
+    if (isPatientInfoRequired && !selectedClient) {
       console.log('Validation Error', 'Please select a client');
       Alert.alert('Validation Error', 'Please select a client');
       return;
     }
-    if (!selectedBranch && !isLeave) {
+    if (!selectedBranch) {
       console.log('Validation Error', 'Please select a branch');
       Alert.alert('Validation Error', 'Please select a branch');
       return;
     }
-    if (isAppointment && !selectedProcedure && !isLeave) {
+    if (isPatientInfoRequired && !selectedProcedure) {
       console.log('Validation Error', 'Please select a procedure');
       Alert.alert('Validation Error', 'Please select a procedure');
       return;
@@ -723,9 +721,7 @@ export default function CreateAppointmentScreen() {
   const handleSubmit = async () => {
     if (isEditMode) {
       console.log('[CreateAppointment] Edit mode, bypassing double booking check');
-      const isAppointment = selectedAppointmentType?.id === 'Appointment';
-
-      if (isAppointment && !selectedClient) {
+      if (isPatientInfoRequired && !selectedClient) {
         Alert.alert('Validation Error', 'Please select a client');
         return;
       }
@@ -733,7 +729,7 @@ export default function CreateAppointmentScreen() {
         Alert.alert('Validation Error', 'Please select a branch');
         return;
       }
-      if (isAppointment && !selectedProcedure) {
+      if (isPatientInfoRequired && !selectedProcedure) {
         Alert.alert('Validation Error', 'Please select a procedure');
         return;
       }
@@ -970,12 +966,15 @@ export default function CreateAppointmentScreen() {
     { id: 'Appointment', label: 'Appointment' },
     { id: 'Meeting', label: 'Meeting' },
     { id: 'Leave', label: 'Leave' },
-    { id: 'Sickleave', label: 'Sick Leave' },
-    { id: 'Reminder', label: 'Reminder' },
-    { id: 'Admin', label: 'Admin' },
-    { id: 'Personal', label: 'Personal' },
-    { id: 'Unavailable', label: 'Unavailable' },
+    { id: 'Sick leave', label: 'Sick leave' },
     { id: 'Other', label: 'Other' },
+    { id: 'Admin', label: 'Admin' },
+    { id: 'Reminder', label: 'Reminder' },
+    { id: 'Theater', label: 'Theater' },
+    { id: 'Training', label: 'Training' },
+    { id: 'Unavailable', label: 'Unavailable' },
+    { id: 'Personal', label: 'Personal' },
+    { id: 'Travel time', label: 'Travel time' },
   ];
 
   const clientOptions: DropdownOption[] = clients.map(c => ({ id: c.id, label: c.name }));
@@ -1029,18 +1028,6 @@ export default function CreateAppointmentScreen() {
             appointmentTypeOptions,
             (option) => {
               setSelectedAppointmentType(option);
-
-              if (option.id === 'Leave') {
-                setShowUntilDate(true);
-              } else {
-                setShowUntilDate(false);
-              }
-
-              if (option.id === 'Personal') {
-                setIsPersonalAppointment(true);
-              } else {
-                setIsPersonalAppointment(false);
-              }
             },
             'appointmentType'
           )}
@@ -1153,7 +1140,7 @@ export default function CreateAppointmentScreen() {
 
 
           {/* Client Dropdown with Search */}
-          {renderDropdown(
+          {isPatientInfoRequired && renderDropdown(
             'Client',
             selectedClient,
             clientOptions,
@@ -1171,7 +1158,7 @@ export default function CreateAppointmentScreen() {
           )}
 
           {/* Procedure Dropdown or Description */}
-          {isPersonalAppointment ? (
+          {!isPatientInfoRequired ? (
             <View style={styles.fieldContainer}>
               <Text style={[styles.label, { color: colors.text }]}>Appointment description</Text>
               <TextInput
@@ -1209,7 +1196,7 @@ export default function CreateAppointmentScreen() {
           )}
 
           {/* Assistant Dropdown */}
-          {renderDropdown(
+          {isPatientInfoRequired && renderDropdown(
             'Assistant (Optional)',
             selectedAssistant,
             assistantOptions,

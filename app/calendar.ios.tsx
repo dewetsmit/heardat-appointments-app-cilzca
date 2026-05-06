@@ -106,7 +106,7 @@ export default function CalendarScreen() {
 
       for (const audiologist of selectedAudiologists) {
         console.log('[Calendar] Fetching appointments for audiologist:', audiologist.full_name, 'ID:', audiologist.user_id);
-        
+
         try {
           const searchUser = {
             CompanyID: user.CompanyID,
@@ -115,17 +115,17 @@ export default function CalendarScreen() {
           };
 
           const data = await getUserAppointments(startDate, endDate, searchUser);
-          
+
           if (data && data.appointments && Array.isArray(data.appointments)) {
             console.log('[Calendar] Found', data.appointments.length, 'appointments for', audiologist.full_name);
-            
+
             // Add audiologist info to each appointment
             const appointmentsWithAudiologist = data.appointments.map((apt: HeardatAppointment) => ({
               ...apt,
               audiologistName: audiologist.full_name,
               audiologistId: audiologist.user_id,
             }));
-            
+
             allAppointments.push(...appointmentsWithAudiologist);
           } else {
             console.log('[Calendar] No appointments found for', audiologist.full_name);
@@ -171,11 +171,11 @@ export default function CalendarScreen() {
 
   const handleAppointmentPress = (appointment: any) => {
     console.log('[Calendar] Appointment pressed:', appointment.AppointmentID);
-    
-    const clientName = appointment.ClientName || 
-                      `${appointment.FirstName || ''} ${appointment.LastName || ''}`.trim() || 
-                      '';
-                      
+
+    const clientName = appointment.ClientName ||
+      `${appointment.FirstName || ''} ${appointment.LastName || ''}`.trim() ||
+      '';
+
     router.push({
       pathname: '/appointment-detail',
       params: {
@@ -255,11 +255,11 @@ export default function CalendarScreen() {
   // Build marked dates for month view with colored dots - FIXED with useMemo
   const markedDates = useMemo(() => {
     const marks: any = {};
-    
+
     appointments.forEach((apt) => {
       // Format the date key properly from ISO timestamp
       const dateKey = moment(apt.DateAppointment).format('YYYY-MM-DD');
-      
+
       if (dateKey) {
         // If date already has appointments, add to the dots array
         if (marks[dateKey]) {
@@ -449,7 +449,7 @@ export default function CalendarScreen() {
             {loadingAppointmentsText}
           </Text>
         </View>
-      ) : (
+      ) : viewMode === 'month' ? (
         <ScrollView
           style={styles.container}
           refreshControl={
@@ -460,31 +460,7 @@ export default function CalendarScreen() {
             />
           }
         >
-          {viewMode === 'day' && (
-            <CalendarDayView
-              selectedDate={selectedDate}
-              appointments={appointments}
-              selectedAudiologists={selectedAudiologists}
-              onAppointmentPress={handleAppointmentPress}
-              onSwipeLeft={navigateNext}
-              onSwipeRight={navigatePrevious}
-            />
-          )}
-
-          {viewMode === 'week' && (
-            <CalendarWeekView
-              selectedDate={selectedDate}
-              appointments={appointments}
-              selectedAudiologists={selectedAudiologists}
-              onAppointmentPress={handleAppointmentPress}
-              onDayPress={handleDayPressFromWeek}
-              onSwipeLeft={navigateNext}
-              onSwipeRight={navigatePrevious}
-            />
-          )}
-
-          {viewMode === 'month' && (
-            <View style={styles.monthViewContainer}>
+          <View style={styles.monthViewContainer}>
               <Calendar
                 current={selectedDate}
                 onDayPress={onDayPress}
@@ -536,7 +512,7 @@ export default function CalendarScreen() {
                   </View>
                 ) : (
                   selectedDateAppointments.map((apt) => {
-                    const timeText = formatTime(apt.TimeAppointment);
+                    const timeText = formatTime(apt.DateAppointment);
 
                     return (
                       <TouchableOpacity
@@ -557,7 +533,7 @@ export default function CalendarScreen() {
                         </View>
 
                         <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
-                          {apt.ClientName}
+                          {apt.FirstName + " " + apt.LastName}
                         </Text>
 
                         {apt.audiologistName && (
@@ -585,8 +561,38 @@ export default function CalendarScreen() {
                 )}
               </View>
             </View>
-          )}
         </ScrollView>
+      ) : (
+        <View style={styles.container}>
+          {viewMode === 'day' && (
+            <CalendarDayView
+              selectedDate={selectedDate}
+              appointments={appointments}
+              selectedAudiologists={selectedAudiologists}
+              onAppointmentPress={handleAppointmentPress}
+              onSwipeLeft={navigateNext}
+              onSwipeRight={navigatePrevious}
+              refreshControl={
+                <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
+              }
+            />
+          )}
+
+          {viewMode === 'week' && (
+            <CalendarWeekView
+              selectedDate={selectedDate}
+              appointments={appointments}
+              selectedAudiologists={selectedAudiologists}
+              onAppointmentPress={handleAppointmentPress}
+              onDayPress={handleDayPressFromWeek}
+              onSwipeLeft={navigateNext}
+              onSwipeRight={navigatePrevious}
+              refreshControl={
+                <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
+              }
+            />
+          )}
+        </View>
       )}
 
       <FABMenu />

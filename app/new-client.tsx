@@ -17,7 +17,7 @@ import { useTheme } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { heardatApiCall, getHeardatCredentials, getBranches } from '@/utils/api';
+import { heardatApiCall, getHeardatCredentials, getBranches, createNewPatient } from '@/utils/api';
 
 interface DropdownOption {
   id: string;
@@ -207,45 +207,36 @@ export default function NewClientScreen() {
       setLoading(true);
       console.log('[NewClient] Creating new client');
 
-      const credentials = await getHeardatCredentials();
-
-      const baseParams = {
-        CompanyID: credentials.companyId || '0',
-        Active: '1',
-        Deleted: '0',
-      };
-
-      // Built precisely for the first selected patient
       const clientData: Record<string, string> = {
-        ...baseParams,
-        FirstName: firstName,
+        PatientID: "0",
         LastName: lastName,
-        Name: firstName,
-        Surname: lastName,
-        Initials: initials,
+        FirstName: firstName,
+        NickName: "",
         IDNumber: idNumber,
         DateOfBirth: formatDate(dateOfBirth),
+        Home: "",
         Cell: cellphoneNumber,
         Email: email,
         Gender: selectedGender?.id || '',
-        Language: selectedLanguage?.id || '',
-        Title: selectedTitle?.id || '',
+        TitleID: selectedTitle?.id || '',
+        LanguageID: selectedLanguage?.id || '',
         BranchID: selectedBranch.id,
-        MedicalAid: medicalAid, // Left as string; if MedicalAid dropdown is added later, swap for MedicalAidID
-        MedicalAidID: '0', // Default MedicalAidID
-        MedicalAidPlan: medicalAidPlan,
-        MemberNumber: memberNumber,
-        MainMember: '0', // Default 0 for patient if they are not the main member
+        MedicalAidID: '0',
+        MedicalAidPlanID: medicalAidPlan,
+        MemberNo: memberNumber,
+        CompanyName: "",
+        SpecialNote: "",
+        MainMember: selectedMainMember?.id === 'Yes' ? '1' : '0',
+        Intials: initials,
+        DepCode: "",
+        Occupation: "",
+        Agree: "1"
       };
-
-      if (selectedMainMember.id === 'Yes') {
-        clientData.MainMember = '1';
-      }
 
       console.log('[NewClient] Client data:', clientData);
 
-      // Call Heardat API to create the primary patient
-      const response = await heardatApiCall('Patients', clientData, 'POST');
+      // Call API to create the primary patient
+      const response = await createNewPatient(clientData);
 
       if (!response ||
         (typeof response === 'object' && (response.error || response.status === 'error' || response.success === false)) ||
@@ -261,28 +252,32 @@ export default function NewClientScreen() {
       if (isNotMainMember) {
         console.log('[NewClient] User is not main member. Creating Main Member patient record...');
         const mainMemberData: Record<string, string> = {
-          ...baseParams,
-          FirstName: mmFirstName,
+          PatientID: "0",
           LastName: mmLastName,
-          Name: mmFirstName,
-          Surname: mmLastName,
-          Initials: mmInitials,
+          FirstName: mmFirstName,
+          NickName: "",
           IDNumber: mmIdNumber,
           DateOfBirth: formatDate(mmDateOfBirth),
+          Home: "",
           Cell: mmCellphoneNumber,
           Email: mmEmail,
           Gender: mmSelectedGender?.id || '',
-          Language: mmSelectedLanguage?.id || '',
-          Title: mmSelectedTitle?.id || '',
+          TitleID: mmSelectedTitle?.id || '',
+          LanguageID: mmSelectedLanguage?.id || '',
           BranchID: mmSelectedBranch?.id || selectedBranch.id, // Fallback to main branch
-          MedicalAid: mmMedicalAid,
           MedicalAidID: '0',
-          MedicalAidPlan: mmMedicalAidPlan,
-          MemberNumber: mmMemberNumber,
-          MainMember: '1', // 1 because this IS the main member
+          MedicalAidPlanID: mmMedicalAidPlan,
+          MemberNo: mmMemberNumber,
+          CompanyName: "",
+          SpecialNote: "",
+          MainMember: "1",
+          Intials: mmInitials,
+          DepCode: "",
+          Occupation: "",
+          Agree: "1"
         };
 
-        const mmResponse = await heardatApiCall('Patients', mainMemberData, 'POST');
+        const mmResponse = await createNewPatient(mainMemberData);
 
         if (!mmResponse ||
           (typeof mmResponse === 'object' && (mmResponse.error || mmResponse.status === 'error' || mmResponse.success === false)) ||

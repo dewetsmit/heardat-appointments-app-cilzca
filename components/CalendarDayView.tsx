@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Modal,
+  Animated,
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -34,6 +35,7 @@ interface CalendarDayViewProps {
   onAppointmentPress?: (appointment: Appointment) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
+  refreshControl?: React.ReactElement;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -82,13 +84,15 @@ export function CalendarDayView({
   selectedAudiologists,
   onAppointmentPress,
   onSwipeLeft,
-  onSwipeRight
+  onSwipeRight,
+  refreshControl
 }: CalendarDayViewProps) {
   const theme = useTheme();
   const [slotInterval, setSlotInterval] = useState(60); // Current interval in minutes
   const [legendModalVisible, setLegendModalVisible] = useState(false);
   const [intervalModalVisible, setIntervalModalVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   // Calculate slot height based on interval (60 minutes = 60px baseline)
   const slotHeight = slotInterval;
@@ -170,9 +174,9 @@ export function CalendarDayView({
   const intervalText = `${slotInterval} min`;
 
   // Calculate column width based on number of audiologists
-  const numAudiologists = selectedAudiologists.length;
+  const numAudiologists = Math.max(1, selectedAudiologists.length);
   const availableWidth = SCREEN_WIDTH - TIME_COLUMN_WIDTH - 40;
-  const columnWidth = availableWidth / numAudiologists;
+  const columnWidth = Math.max(availableWidth / numAudiologists, 100);
 
   // Group appointments by audiologist
   const appointmentsByAudiologist: { [key: string]: Appointment[] } = {};
@@ -201,7 +205,7 @@ export function CalendarDayView({
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
-        <View style={styles.navigationButtons}>
+        <View style={[styles.navigationButtons, { marginBottom: 0 }]}>
           <TouchableOpacity
             style={[styles.navButton, { backgroundColor: `${theme.colors.primary}20` }]}
             onPress={onSwipeRight}
@@ -230,30 +234,6 @@ export function CalendarDayView({
             />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.zoomIndicator}
-          onPress={() => {
-            console.log('[CalendarDayView] Opening interval selector');
-            setIntervalModalVisible(true);
-          }}
-          activeOpacity={0.7}
-        >
-          <IconSymbol
-            ios_icon_name="clock"
-            android_material_icon_name="schedule"
-            size={16}
-            color={theme.dark ? '#98989D' : '#666'}
-          />
-          <Text style={[styles.zoomText, { color: theme.dark ? '#98989D' : '#666' }]}>
-            {intervalText}
-          </Text>
-          <IconSymbol
-            ios_icon_name="chevron.down"
-            android_material_icon_name="arrow-drop-down"
-            size={16}
-            color={theme.dark ? '#98989D' : '#666'}
-          />
-        </TouchableOpacity>
       </View>
 
       {/* Full-day events section */}
@@ -314,8 +294,26 @@ export function CalendarDayView({
 
       {/* Audiologist headers with tappable legend */}
       <View style={[styles.audiologistHeaders, { backgroundColor: theme.colors.card }]}>
-        <View style={{ width: TIME_COLUMN_WIDTH }} />
-        {selectedAudiologists.map((audiologist, index) => {
+        <View style={{ width: TIME_COLUMN_WIDTH, backgroundColor: theme.colors.card, zIndex: 10, justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={styles.zoomIndicator}
+            onPress={() => setIntervalModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.zoomText, { color: theme.dark ? '#98989D' : '#666' }]} numberOfLines={1} adjustsFontSizeToFit>
+              {intervalText}
+            </Text>
+            <IconSymbol
+              ios_icon_name="chevron.down"
+              android_material_icon_name="arrow-drop-down"
+              size={12}
+              color={theme.dark ? '#98989D' : '#666'}
+            />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, overflow: 'hidden' }}>
+          <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: Animated.multiply(scrollX, -1) }] }}>
+            {selectedAudiologists.map((audiologist, index) => {
           const color = getAudiologistColor(index);
           const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
 
@@ -343,6 +341,8 @@ export function CalendarDayView({
             </TouchableOpacity>
           );
         })}
+          </Animated.View>
+        </View>
       </View>
 
       <ScrollView
@@ -351,6 +351,7 @@ export function CalendarDayView({
         showsVerticalScrollIndicator={true}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={refreshControl}
       >
         <View style={styles.timelineContainer}>
           {/* Time labels */}
@@ -365,8 +366,18 @@ export function CalendarDayView({
           </View>
 
           {/* Audiologist columns */}
-          <View style={styles.columnsContainer}>
-            {selectedAudiologists.map((audiologist, audiologistIndex) => {
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.columnsContainer}>
+              {selectedAudiologists.map((audiologist, audiologistIndex) => {
               const color = getAudiologistColor(audiologistIndex);
               const audiologistAppointments = appointmentsByAudiologist[audiologist.user_id] || [];
 
@@ -427,7 +438,8 @@ export function CalendarDayView({
                 </View>
               );
             })}
-          </View>
+            </View>
+          </Animated.ScrollView>
         </View>
       </ScrollView>
 
@@ -609,15 +621,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
     backgroundColor: 'rgba(0,0,0,0.05)',
-    alignSelf: 'center',
+    maxWidth: TIME_COLUMN_WIDTH - 8,
   },
   zoomText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   fullDayEventsContainer: {

@@ -64,7 +64,6 @@ export default function SideNav({ visible, onClose }: SideNavProps) {
       androidIcon: 'person-add',
       iosIcon: 'person.badge.plus',
       route: '/new-client',
-      disabled: true,
     },
     {
       label: 'Room Planner',

@@ -339,6 +339,54 @@ export const createAppointmentNote = async (
 };
 
 /**
+ * Create a new patient in Heardat API
+ * 
+ * @param patientData - Patient form data object
+ * @returns Promise with created patient data
+ */
+export const createNewPatient = async (
+  patientData: Record<string, any>
+): Promise<any> => {
+  try {
+    console.log('[API] Creating new patient with data:', patientData);
+
+    // Get current user credentials
+    const credentials = await getHeardatCredentials();
+
+    if (!credentials.userId) {
+      throw new Error("User ID not found. Please sign in again.");
+    }
+    if (!credentials.companyKey) {
+      throw new Error("Company Key not found. Please sign in again.");
+    }
+
+    // Build params object, filtering out empty values
+    const params: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(patientData)) {
+      if (value !== "" && value !== null && value !== undefined) {
+        params[key] = value ? value.toString() : "";
+      }
+    }
+
+    // Add UserID and CompanyID from current user
+    params["UserID"] = credentials.userId;
+    params["CompanyID"] = credentials.companyId || "";
+
+    console.log('[API] Patient params after processing:', params);
+
+    // Call Heardat API with POST method and params as query string
+    const data = await heardatApiCall('Patients', params, 'POST');
+
+    console.log('[API] Patient created successfully');
+    return data;
+  } catch (error) {
+    console.error('[API] Failed to create patient:', error);
+    throw error;
+  }
+};
+
+/**
  * Get appointments for a user (current or searched user)
  * Based on the Angular getAppointmentsForUser method
  * 

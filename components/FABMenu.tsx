@@ -137,6 +137,32 @@ export function FABMenu({ onCreateAppointment, onCreateClient }: FABMenuProps) {
             </Text>
           </TouchableOpacity>
         </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.menuItem,
+            {
+              transform: [{ translateY: clientTranslateY }],
+              opacity,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.menuButton, { backgroundColor: theme.colors.card }]}
+            onPress={handleCreateClient}
+            activeOpacity={0.8}
+          >
+            <IconSymbol
+              ios_icon_name="person.badge.plus"
+              android_material_icon_name="person-add"
+              size={24}
+              color={theme.colors.primary}
+            />
+            <Text style={[styles.menuLabel, { color: theme.colors.text }]}>
+              {clientText}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
         </View>
           </TouchableWithoutFeedback>
         </Modal>

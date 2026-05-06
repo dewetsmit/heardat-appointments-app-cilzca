@@ -9,13 +9,15 @@ import {
   TouchableOpacity,
   Dimensions,
   Modal,
+  Animated,
 } from 'react-native';
 import { Audiologist } from '@/types';
 import { IconSymbol } from '@/components/IconSymbol';
 
 interface Appointment {
   AppointmentID: string;
-  ClientName: string;
+  FirstName: string;
+  LastName: string;
   UserName: string;
   DateAppointment: string;
   Duration?: string;
@@ -33,6 +35,7 @@ interface CalendarWeekViewProps {
   onDayPress?: (date: string) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
+  refreshControl?: React.ReactElement;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -56,14 +59,14 @@ const AUDIOLOGIST_COLORS = [
 // Helper to parse duration string (HH:MM:SS) to minutes
 function parseDurationToMinutes(duration: string | undefined): number {
   if (!duration) return 30;
-  
+
   const parts = duration.split(':');
   if (parts.length >= 2) {
     const hours = parseInt(parts[0], 10) || 0;
     const minutes = parseInt(parts[1], 10) || 0;
     return hours * 60 + minutes;
   }
-  
+
   return 30;
 }
 
@@ -73,18 +76,20 @@ function isFullDayEvent(duration: string | undefined): boolean {
   return minutes > 480; // 8 hours = 480 minutes
 }
 
-export function CalendarWeekView({ 
-  selectedDate, 
-  appointments, 
-  selectedAudiologists, 
-  onAppointmentPress, 
+export function CalendarWeekView({
+  selectedDate,
+  appointments,
+  selectedAudiologists,
+  onAppointmentPress,
   onDayPress,
   onSwipeLeft,
-  onSwipeRight 
+  onSwipeRight,
+  refreshControl
 }: CalendarWeekViewProps) {
   const theme = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const [legendModalVisible, setLegendModalVisible] = useState(false);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   // Separate full-day events from regular appointments
   const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
@@ -107,7 +112,9 @@ export function CalendarWeekView({
   };
 
   const weekDates = getWeekDates();
-  const dayWidth = (SCREEN_WIDTH - TIME_COLUMN_WIDTH - 40) / 7;
+  const numAudiologists = Math.max(1, selectedAudiologists.length);
+  const minDayWidth = (100 * numAudiologists) + 4;
+  const dayWidth = Math.max((SCREEN_WIDTH - TIME_COLUMN_WIDTH - 40) / 7, minDayWidth);
 
   // Generate time slots (6am to 7pm)
   const generateTimeSlots = () => {
@@ -144,28 +151,28 @@ export function CalendarWeekView({
 
   const getAppointmentPosition = (appointment: Appointment) => {
     const DateStringToDate = new Date(appointment.DateAppointment);
-    const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
-    
+    const time = { hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes() };
+
     // Calculate minutes from START_HOUR (6am)
     const totalMinutesFromStart = (time.hour - START_HOUR) * 60 + time.minute;
     const pixelsPerMinute = SLOT_HEIGHT / 60;
-    
+
     const top = totalMinutesFromStart * pixelsPerMinute;
     const durationMinutes = parseDurationToMinutes(appointment.Duration);
     const height = durationMinutes * pixelsPerMinute;
-    
+
     return { top, height };
   };
 
   // Group appointments by date and audiologist
   const appointmentsByDateAndAudiologist: { [dateKey: string]: { [audiologistId: string]: Appointment[] } } = {};
   const fullDayEventsByDate: { [dateKey: string]: Appointment[] } = {};
-  
+
   weekDates.forEach((date) => {
     const dateKey = formatDateKey(date);
     appointmentsByDateAndAudiologist[dateKey] = {};
     fullDayEventsByDate[dateKey] = [];
-    
+
     selectedAudiologists.forEach((audiologist) => {
       appointmentsByDateAndAudiologist[dateKey][audiologist.user_id] = regularAppointments.filter((apt) => {
         const aptDate = new Date(apt.DateAppointment);
@@ -186,7 +193,7 @@ export function CalendarWeekView({
   const currentTime = new Date();
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
-  
+
   // Calculate current time position relative to START_HOUR
   const currentMinutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
   const currentTimePosition = currentMinutesFromStart * (SLOT_HEIGHT / 60);
@@ -264,108 +271,116 @@ export function CalendarWeekView({
 
       {/* Day headers */}
       <View style={[styles.dayHeadersContainer, { backgroundColor: theme.colors.card }]}>
-        <View style={{ width: TIME_COLUMN_WIDTH }} />
-        {weekDates.map((date, index) => {
-          const CalDateStringToDate = new Date(date);
-          const dateKey = formatDateKey(CalDateStringToDate);
-          const dayAppointments = regularAppointments.filter((apt) => {
-            const AptDateStringToDate = new Date(apt.DateAppointment);
-            const aptDateKey = formatDateKey(AptDateStringToDate);
-            return aptDateKey === dateKey;
-          });
-          const dayFullDayEvents = fullDayEventsByDate[dateKey] || [];
-          const isTodayDate = isToday(date);
-          const isSelected = dateKey === selectedDate;
+        <View style={{ width: TIME_COLUMN_WIDTH, backgroundColor: theme.colors.card, zIndex: 10 }} />
+        <View style={{ flex: 1, overflow: 'hidden' }}>
+          <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: Animated.multiply(scrollX, -1) }] }}>
+            {weekDates.map((date, index) => {
+              const CalDateStringToDate = new Date(date);
+              const dateKey = formatDateKey(CalDateStringToDate);
+              const dayAppointments = regularAppointments.filter((apt) => {
+                const AptDateStringToDate = new Date(apt.DateAppointment);
+                const aptDateKey = formatDateKey(AptDateStringToDate);
+                return aptDateKey === dateKey;
+              });
+              const dayFullDayEvents = fullDayEventsByDate[dateKey] || [];
+              const isTodayDate = isToday(date);
+              const isSelected = dateKey === selectedDate;
 
-          const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-          const dayNumber = date.getDate().toString();
+              const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+              const dayNumber = date.getDate().toString();
 
-          return (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.dayHeader,
-                { width: dayWidth },
-                isSelected && { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() => onDayPress?.(dateKey)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.dayName,
-                  { color: isSelected ? '#FFFFFF' : theme.dark ? '#98989D' : '#666' },
-                ]}
-              >
-                {dayName}
-              </Text>
-              <View
-                style={[
-                  styles.dayNumberContainer,
-                  isTodayDate && !isSelected && { backgroundColor: theme.colors.primary },
-                ]}
-              >
-                <Text
+              return (
+                <TouchableOpacity
+                  key={index}
                   style={[
-                    styles.dayNumber,
-                    {
-                      color: isSelected
-                        ? '#FFFFFF'
-                        : isTodayDate
-                        ? '#FFFFFF'
-                        : theme.colors.text,
-                    },
+                    styles.dayHeader,
+                    { width: dayWidth },
+                    isSelected && { backgroundColor: theme.colors.primary },
                   ]}
+                  onPress={() => onDayPress?.(dateKey)}
+                  activeOpacity={0.7}
                 >
-                  {dayNumber}
-                </Text>
-              </View>
-              {(dayAppointments.length > 0 || dayFullDayEvents.length > 0) && (
-                <View style={styles.appointmentCountBadge}>
-                  <Text style={styles.appointmentCountText}>
-                    {dayAppointments.length + dayFullDayEvents.length}
+                  <Text
+                    style={[
+                      styles.dayName,
+                      { color: isSelected ? '#FFFFFF' : theme.dark ? '#98989D' : '#666' },
+                    ]}
+                  >
+                    {dayName}
                   </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+                  <View
+                    style={[
+                      styles.dayNumberContainer,
+                      isTodayDate && !isSelected && { backgroundColor: theme.colors.primary },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayNumber,
+                        {
+                          color: isSelected
+                            ? '#FFFFFF'
+                            : isTodayDate
+                              ? '#FFFFFF'
+                              : theme.colors.text,
+                        },
+                      ]}
+                    >
+                      {dayNumber}
+                    </Text>
+                  </View>
+                  {(dayAppointments.length > 0 || dayFullDayEvents.length > 0) && (
+                    <View style={styles.appointmentCountBadge}>
+                      <Text style={styles.appointmentCountText}>
+                        {dayAppointments.length + dayFullDayEvents.length}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </Animated.View>
+        </View>
       </View>
 
       {/* Full-day events row */}
       {fullDayEvents.length > 0 && (
         <View style={[styles.fullDayEventsRow, { backgroundColor: theme.colors.card }]}>
-          <View style={{ width: TIME_COLUMN_WIDTH, paddingRight: 8 }}>
+          <View style={{ width: TIME_COLUMN_WIDTH, paddingRight: 8, backgroundColor: theme.colors.card, zIndex: 10 }}>
             <Text style={[styles.fullDayLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
               All Day
             </Text>
           </View>
-          <View style={styles.fullDayEventsGrid}>
-            {weekDates.map((date, index) => {
-              const dateKey = formatDateKey(date);
-              const dayFullDayEvents = fullDayEventsByDate[dateKey] || [];
+          <View style={{ flex: 1, overflow: 'hidden' }}>
+            <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: Animated.multiply(scrollX, -1) }] }}>
+              <View style={styles.fullDayEventsGrid}>
+                {weekDates.map((date, index) => {
+                  const dateKey = formatDateKey(date);
+                  const dayFullDayEvents = fullDayEventsByDate[dateKey] || [];
 
-              return (
-                <View key={index} style={[styles.fullDayEventCell, { width: dayWidth }]}>
-                  {dayFullDayEvents.map((event) => {
-                    const color = getAudiologistColor(event.audiologistId || '');
-                    
-                    return (
-                      <TouchableOpacity
-                        key={event.AppointmentID}
-                        style={[styles.fullDayEventBadge, { backgroundColor: color }]}
-                        onPress={() => onAppointmentPress?.(event)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.fullDayEventText} numberOfLines={1}>
-                          {event.Type}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              );
-            })}
+                  return (
+                    <View key={index} style={[styles.fullDayEventCell, { width: dayWidth }]}>
+                      {dayFullDayEvents.map((event) => {
+                        const color = getAudiologistColor(event.audiologistId || '');
+
+                        return (
+                          <TouchableOpacity
+                            key={event.AppointmentID}
+                            style={[styles.fullDayEventBadge, { backgroundColor: color }]}
+                            onPress={() => onAppointmentPress?.(event)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.fullDayEventText} numberOfLines={1}>
+                              {event.Type}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                })}
+              </View>
+            </Animated.View>
           </View>
         </View>
       )}
@@ -376,6 +391,7 @@ export function CalendarWeekView({
         showsVerticalScrollIndicator={true}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={refreshControl}
       >
         <View style={styles.timelineContainer}>
           {/* Time labels */}
@@ -390,83 +406,94 @@ export function CalendarWeekView({
           </View>
 
           {/* Days grid */}
-          <View style={styles.daysGridContainer}>
-            {weekDates.map((date, dayIndex) => {
-              const dateKey = formatDateKey(date);
-              const isTodayDate = isToday(date);
-              const showCurrentTimeIndicator = isTodayDate && currentHour >= START_HOUR && currentHour <= END_HOUR;
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.daysGridContainer}>
+              {weekDates.map((date, dayIndex) => {
+                const dateKey = formatDateKey(date);
+                const isTodayDate = isToday(date);
+                const showCurrentTimeIndicator = isTodayDate && currentHour >= START_HOUR && currentHour <= END_HOUR;
 
-              return (
-                <View key={dayIndex} style={[styles.dayColumn, { width: dayWidth }]}>
-                  {/* Grid lines */}
-                  {timeSlots.map((slot, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.gridCell,
-                        { height: SLOT_HEIGHT, borderColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
-                      ]}
-                    />
-                  ))}
+                return (
+                  <View key={dayIndex} style={[styles.dayColumn, { width: dayWidth }]}>
+                    {/* Grid lines */}
+                    {timeSlots.map((slot, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.gridCell,
+                          { height: SLOT_HEIGHT, borderColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
+                        ]}
+                      />
+                    ))}
 
-                  {/* Current time indicator */}
-                  {showCurrentTimeIndicator && (
-                    <View
-                      style={[
-                        styles.currentTimeIndicator,
-                        { top: currentTimePosition, backgroundColor: theme.colors.primary },
-                      ]}
-                    />
-                  )}
+                    {/* Current time indicator */}
+                    {showCurrentTimeIndicator && (
+                      <View
+                        style={[
+                          styles.currentTimeIndicator,
+                          { top: currentTimePosition, backgroundColor: theme.colors.primary },
+                        ]}
+                      />
+                    )}
 
-                  {/* Appointments for all audiologists */}
-                  {selectedAudiologists.map((audiologist, audiologistIndex) => {
-                    const audiologistAppointments = appointmentsByDateAndAudiologist[dateKey]?.[audiologist.user_id] || [];
-                    const color = getAudiologistColor(audiologist.user_id);
-                    const numAudiologists = selectedAudiologists.length;
-                    const appointmentWidth = (dayWidth - 4) / numAudiologists;
-                    const leftOffset = 2 + (audiologistIndex * appointmentWidth);
+                    {/* Appointments for all audiologists */}
+                    {selectedAudiologists.map((audiologist, audiologistIndex) => {
+                      const audiologistAppointments = appointmentsByDateAndAudiologist[dateKey]?.[audiologist.user_id] || [];
+                      const color = getAudiologistColor(audiologist.user_id);
+                      const numAudiologists = selectedAudiologists.length;
+                      const appointmentWidth = (dayWidth - 4) / numAudiologists;
+                      const leftOffset = 2 + (audiologistIndex * appointmentWidth);
 
-                    return (
-                      <React.Fragment key={audiologist.user_id}>
-                        {audiologistAppointments.map((appointment) => {
-                          const position = getAppointmentPosition(appointment);
-                          const DateStringToDate = new Date(appointment.DateAppointment);
-                          const time = {hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes()};
-                          const timeText = `${time.hour % 12 || 12}:${time.minute.toString().padStart(2, '0')}`;
+                      return (
+                        <React.Fragment key={audiologist.user_id}>
+                          {audiologistAppointments.map((appointment) => {
+                            const position = getAppointmentPosition(appointment);
+                            const DateStringToDate = new Date(appointment.DateAppointment);
+                            const time = { hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes() };
+                            const timeText = `${time.hour % 12 || 12}:${time.minute.toString().padStart(2, '0')}`;
 
-                          return (
-                            <TouchableOpacity
-                              key={appointment.AppointmentID}
-                              style={[
-                                styles.appointmentBlock,
-                                {
-                                  top: position.top,
-                                  left: leftOffset,
-                                  width: appointmentWidth - 2,
-                                  height: Math.max(position.height, 30),
-                                  backgroundColor: color,
-                                },
-                              ]}
-                              onPress={() => onAppointmentPress?.(appointment)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.appointmentTime} numberOfLines={1}>
-                                {timeText}
-                              </Text>
-                              <Text style={styles.appointmentClient} numberOfLines={1}>
-                                {appointment.ClientName}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </View>
-              );
-            })}
-          </View>
+                            return (
+                              <TouchableOpacity
+                                key={appointment.AppointmentID}
+                                style={[
+                                  styles.appointmentBlock,
+                                  {
+                                    top: position.top,
+                                    left: leftOffset,
+                                    width: appointmentWidth - 2,
+                                    height: Math.max(position.height, 30),
+                                    backgroundColor: color,
+                                  },
+                                ]}
+                                onPress={() => onAppointmentPress?.(appointment)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.appointmentTime} numberOfLines={1}>
+                                  {timeText}
+                                </Text>
+                                <Text style={styles.appointmentClient} numberOfLines={1}>
+                                  {appointment.FirstName} {appointment.LastName}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </View>
+          </Animated.ScrollView>
         </View>
       </ScrollView>
 
