@@ -775,6 +775,7 @@ const styles = StyleSheet.create({
   },
   legendList: {
     maxHeight: 400,
+    flexShrink: 1,
   },
   legendItem: {
     flexDirection: 'row',

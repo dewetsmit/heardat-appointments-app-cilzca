@@ -63,10 +63,25 @@ export default function CreateAppointmentScreen() {
   const params = useLocalSearchParams();
   const isEditMode = params.editMode === 'true';
   const editAppointmentId = params.appointmentId as string;
+  const passedAppointmentData = params.appointmentData as string;
+
+  const initialDate = (() => {
+    const d = new Date();
+    if (params.selectedDate && typeof params.selectedDate === 'string') {
+      const parts = params.selectedDate.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        return new Date(year, month, day, d.getHours(), d.getMinutes());
+      }
+    }
+    return d;
+  })();
 
   // Form state
-  const [date, setDate] = useState(new Date());
-  const [time, setTime] = useState(new Date());
+  const [date, setDate] = useState(initialDate);
+  const [time, setTime] = useState(initialDate);
   const [selectedClient, setSelectedClient] = useState<DropdownOption | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<DropdownOption | null>(null);
   const [selectedProcedure, setSelectedProcedure] = useState<DropdownOption | null>(null);
@@ -78,7 +93,7 @@ export default function CreateAppointmentScreen() {
   const showUntilDate = ['Leave', 'Sick leave', 'Training', 'Unavailable', 'Personal', 'Travel time'].includes(selectedTypeId);
   const [untilDate, setUntilDate] = useState(new Date());
   const [showUntilDatePicker, setShowUntilDatePicker] = useState(false);
-  const [personalDescription, setPersonalDescription] = useState('');
+
   const [duration, setDuration] = useState(30);
   const [sendReminders, setSendReminders] = useState(true);
   const [repeatAppointment, setRepeatAppointment] = useState(false);
@@ -140,12 +155,24 @@ export default function CreateAppointmentScreen() {
         address: branch.Address || branch.address,
       }));
 
-      const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => ({
-        id: proc.ProcedureID || proc.id,
-        name: proc.Name || 'Unknown',
-        description: proc.Description || proc.description,
-        duration_minutes: proc.Duration || proc.duration_minutes || 30,
-      }));
+      const mappedProcedures: Procedure[] = (proceduresRes || []).map((proc: any) => {
+        let procDuration = 30;
+        if (typeof proc.Duration === 'string' && proc.Duration.includes(':')) {
+          const parts = proc.Duration.split(':');
+          procDuration = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+        } else if (proc.duration_minutes) {
+          procDuration = Number(proc.duration_minutes);
+        } else if (proc.Duration) {
+          procDuration = Number(proc.Duration);
+        }
+
+        return {
+          id: proc.ProcedureID || proc.id,
+          name: proc.Name || 'Unknown',
+          description: proc.Description || proc.description,
+          duration_minutes: procDuration || 30,
+        };
+      });
 
       // Map audiologists from Users endpoint
       const mappedAudiologists: Audiologist[] = (audiologistsRes || []).map((user: any) => ({
@@ -372,7 +399,7 @@ export default function CreateAppointmentScreen() {
         Source: "0",
         UserIDAssigned: selectedExaminer!.id,
         Duration: reformatDurationForAPI(duration),
-        ProcedureID: !isPatientInfoRequired ? personalDescription : (selectedProcedure ? selectedProcedure.id : "0"),
+        ProcedureID: selectedProcedure ? selectedProcedure.id : "0",
         ConsoltationID: "0",
         Type: selectedAppointmentType?.id || "Appointment",
         UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
@@ -493,7 +520,7 @@ export default function CreateAppointmentScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [date, time, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router, isEditMode, editAppointmentId, notes, notesId, showUntilDate, untilDate, personalDescription, selectedAppointmentType]);
+  }, [date, time, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router, isEditMode, editAppointmentId, notes, notesId, showUntilDate, untilDate, selectedAppointmentType]);
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
@@ -717,7 +744,7 @@ export default function CreateAppointmentScreen() {
     const formattedHours = hours.toString().padStart(2, '0');
     const formattedMinutes = minutes.toString().padStart(2, '0');
 
-    return `${formattedHours}:${formattedMinutes}`;
+    return `${formattedHours}:${formattedMinutes}:00`;
   }
 
 
@@ -1072,19 +1099,8 @@ export default function CreateAppointmentScreen() {
             'branch'
           )}
 
-          {/* Procedure Dropdown or Description */}
-          {!isPatientInfoRequired ? (
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: colors.text }]}>Appointment description</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-                placeholder="Enter description..."
-                placeholderTextColor={colors.text + '80'}
-                value={personalDescription}
-                onChangeText={setPersonalDescription}
-              />
-            </View>
-          ) : (
+          {/* Procedure Dropdown */}
+          {isPatientInfoRequired && (
             renderDropdown(
               'Procedure',
               selectedProcedure,
@@ -1152,7 +1168,7 @@ export default function CreateAppointmentScreen() {
             >
               <View style={[styles.dropdownModal, { backgroundColor: colors.card }]}>
                 <ScrollView style={styles.dropdownList}>
-                  {[15, 30, 45, 60, 90, 120].map((mins, index) => {
+                  {Array.from({ length: 35 }, (_, i) => (i + 1) * 15).map((mins, index) => {
                     const durationLabel = formatDuration(mins);
                     return (
                       <React.Fragment key={mins}>
@@ -1176,7 +1192,7 @@ export default function CreateAppointmentScreen() {
                             />
                           )}
                         </TouchableOpacity>
-                        {index < 5 && (
+                        {index < 34 && (
                           <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
                         )}
                       </React.Fragment>

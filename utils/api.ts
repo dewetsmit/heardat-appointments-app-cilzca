@@ -156,14 +156,16 @@ export const heardatApiCall = async <T = any>(
   if (!credentials.sessionKey || !credentials.userKey) {
     throw new Error("Authentication required. Please sign in.");
   }
-
-  // Build query parameters with credentials
-  const params = new URLSearchParams({
+  let params = new URLSearchParams({
     Sessionkey: credentials.sessionKey,
     Userkey: credentials.userKey,
     ...(credentials.companyKey && { Companykey: credentials.companyKey }),
     ...additionalParams,
   });
+  if (endpoint === 'Title') {
+    params.append('CompanyID', credentials.companyId || '');
+  }
+  // Build query parameters with credentials
 
   const url = `${HEARDAT_API_URL}/${endpoint}?${params.toString()}`;
   console.log("[Heardat API] Calling:", endpoint, method);
@@ -659,6 +661,111 @@ export const getAppointmentProcedures = async (): Promise<any> => {
     return parsedData.procedures || [];
   } catch (error) {
     console.error('[API] Failed to get procedures:', error);
+    throw error;
+  }
+};
+
+/**
+ * Helper to safely extract an array from an API response
+ */
+const extractArraySafely = (parsedData: any, expectedKeys: string[]): any[] => {
+  if (!parsedData) return [];
+  if (Array.isArray(parsedData)) return parsedData;
+
+  if (typeof parsedData === 'object') {
+    // Try expected keys
+    for (const key of expectedKeys) {
+      if (parsedData[key] && Array.isArray(parsedData[key])) {
+        return parsedData[key];
+      }
+    }
+    // Fallback: return the first property that is an array
+    for (const key of Object.keys(parsedData)) {
+      if (Array.isArray(parsedData[key])) {
+        console.log(`[API] Found array under unexpected key: ${key}`);
+        return parsedData[key];
+      }
+    }
+  }
+  return [];
+};
+
+/**
+ * Get all genders from Heardat API
+ */
+export const getGenders = async (): Promise<any> => {
+  try {
+    const credentials = await getHeardatCredentials();
+    const params = { Deleted: "0", Active: "1", CompanyID: credentials.companyId || "0" };
+    const data = await heardatApiCall('Genders', params);
+    let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+    return extractArraySafely(parsedData, ['genders', 'gender']);
+  } catch (error) {
+    console.error('[API] Failed to get genders:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all languages from Heardat API
+ */
+export const getLanguages = async (): Promise<any> => {
+  try {
+    const credentials = await getHeardatCredentials();
+    const params = { Deleted: "0", Active: "1", CompanyID: credentials.companyId || "0" };
+    const data = await heardatApiCall('Languages', params);
+    let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+    return extractArraySafely(parsedData, ['languages', 'language']);
+  } catch (error) {
+    console.error('[API] Failed to get languages:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get titles based on gender and language
+ */
+export const getTitles = async (gender: string, languageId: string): Promise<any> => {
+  try {
+    const credentials = await getHeardatCredentials();
+    const params = { Deleted: "0", Active: "1", Gender: gender, Language: languageId };
+    const data = await heardatApiCall('Title', params);
+    let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+    return extractArraySafely(parsedData, ['title', 'titles']);
+  } catch (error) {
+    console.error('[API] Failed to get titles:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all medical aids from Heardat API
+ */
+export const getMedicalAids = async (): Promise<any> => {
+  try {
+    const credentials = await getHeardatCredentials();
+    const params = { Deleted: "0", Active: "1", CompanyID: credentials.companyId || "0" };
+    const data = await heardatApiCall('MedicalAid', params);
+    let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+    return extractArraySafely(parsedData, ['medicalaid', 'medicalAids', 'medicalAid']);
+  } catch (error) {
+    console.error('[API] Failed to get medical aids:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get medical aid plans for a specific medical aid
+ */
+export const getMedicalAidPlans = async (medicalAidId: string): Promise<any> => {
+  try {
+    const credentials = await getHeardatCredentials();
+    const params = { Deleted: "0", Active: "1", CompanyID: credentials.companyId || "0", MedicalAidId: medicalAidId };
+    const data = await heardatApiCall('MedicalAidPlan', params);
+    let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+    return extractArraySafely(parsedData, ['medicalaidplan', 'medicalAidPlans', 'medicalAidPlan']);
+  } catch (error) {
+    console.error('[API] Failed to get medical aid plans:', error);
     throw error;
   }
 };

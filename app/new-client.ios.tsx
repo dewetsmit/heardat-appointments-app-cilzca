@@ -16,34 +16,14 @@ import { useTheme } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { heardatApiCall, getHeardatCredentials, getBranches } from '@/utils/api';
+import { heardatApiCall, getHeardatCredentials, getBranches, createNewPatient, getGenders, getLanguages, getTitles, getMedicalAids, getMedicalAidPlans } from '@/utils/api';
 
 interface DropdownOption {
   id: string;
   label: string;
 }
 
-const GENDER_OPTIONS: DropdownOption[] = [
-  { id: 'Male', label: 'Male' },
-  { id: 'Female', label: 'Female' },
-  { id: 'Other', label: 'Other' },
-];
 
-const LANGUAGE_OPTIONS: DropdownOption[] = [
-  { id: 'English', label: 'English' },
-  { id: 'Afrikaans', label: 'Afrikaans' },
-  { id: 'Zulu', label: 'Zulu' },
-  { id: 'Xhosa', label: 'Xhosa' },
-  { id: 'Other', label: 'Other' },
-];
-
-const TITLE_OPTIONS: DropdownOption[] = [
-  { id: 'Mr', label: 'Mr' },
-  { id: 'Mrs', label: 'Mrs' },
-  { id: 'Ms', label: 'Ms' },
-  { id: 'Dr', label: 'Dr' },
-  { id: 'Prof', label: 'Prof' },
-];
 
 const MAIN_MEMBER_OPTIONS: DropdownOption[] = [
   { id: 'Yes', label: 'Yes' },
@@ -66,8 +46,8 @@ export default function NewClientScreen() {
   const [selectedLanguage, setSelectedLanguage] = useState<DropdownOption | null>(null);
   const [selectedTitle, setSelectedTitle] = useState<DropdownOption | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<DropdownOption | null>(null);
-  const [medicalAid, setMedicalAid] = useState('');
-  const [medicalAidPlan, setMedicalAidPlan] = useState('');
+  const [medicalAid, setMedicalAid] = useState<DropdownOption | null>(null);
+  const [medicalAidPlan, setMedicalAidPlan] = useState<DropdownOption | null>(null);
   const [memberNumber, setMemberNumber] = useState('');
   const [selectedMainMember, setSelectedMainMember] = useState<DropdownOption | null>(null);
 
@@ -83,9 +63,20 @@ export default function NewClientScreen() {
   const [mmSelectedLanguage, setMmSelectedLanguage] = useState<DropdownOption | null>(null);
   const [mmSelectedTitle, setMmSelectedTitle] = useState<DropdownOption | null>(null);
   const [mmSelectedBranch, setMmSelectedBranch] = useState<DropdownOption | null>(null);
-  const [mmMedicalAid, setMmMedicalAid] = useState('');
-  const [mmMedicalAidPlan, setMmMedicalAidPlan] = useState('');
+  const [mmMedicalAid, setMmMedicalAid] = useState<DropdownOption | null>(null);
+  const [mmMedicalAidPlan, setMmMedicalAidPlan] = useState<DropdownOption | null>(null);
   const [mmMemberNumber, setMmMemberNumber] = useState('');
+
+  // Dynamic dropdown options state
+  const [genders, setGenders] = useState<DropdownOption[]>([]);
+  const [languages, setLanguages] = useState<DropdownOption[]>([]);
+  const [titles, setTitles] = useState<DropdownOption[]>([]);
+  const [medicalAids, setMedicalAids] = useState<DropdownOption[]>([]);
+  const [medicalAidPlans, setMedicalAidPlans] = useState<DropdownOption[]>([]);
+
+  // Main member specific dependent options
+  const [mmTitles, setMmTitles] = useState<DropdownOption[]>([]);
+  const [mmMedicalAidPlans, setMmMedicalAidPlans] = useState<DropdownOption[]>([]);
 
   // UI state
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -96,29 +87,86 @@ export default function NewClientScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
 
-  // Load branches on mount
+  // Load initial data on mount
   useEffect(() => {
-    loadBranches();
+    loadInitialData();
   }, []);
 
-  const loadBranches = useCallback(async () => {
+  const loadInitialData = useCallback(async () => {
     try {
       setLoadingBranches(true);
-      console.log('[NewClient] Loading branches');
-      const branchesData = await getBranches();
-      const branchOptions = branchesData.map((branch: any) => ({
-        id: branch.BranchID,
-        label: branch.Name,
-      }));
-      setBranches(branchOptions);
-      console.log('[NewClient] Branches loaded:', branchOptions.length);
+      console.log('[NewClient] Loading initial dynamic data');
+
+      const [branchesData, gendersData, languagesData, medicalAidsData] = await Promise.all([
+        getBranches(),
+        getGenders(),
+        getLanguages(),
+        getMedicalAids()
+      ]);
+
+      setBranches((Array.isArray(branchesData) ? branchesData : []).map((b: any) => ({ id: b.BranchID, label: b.Name })));
+      setGenders((Array.isArray(gendersData) ? gendersData : []).map((g: any) => ({ id: g.GenderID || g.Name || g.id, label: g.Name || g.label })));
+      setLanguages((Array.isArray(languagesData) ? languagesData : []).map((l: any) => ({ id: l.LanguageID || l.Name || l.id, label: l.Name || l.label })));
+      setMedicalAids((Array.isArray(medicalAidsData) ? medicalAidsData : []).map((m: any) => ({ id: m.MedicalAidID || m.Name || m.id, label: m.Name || m.label })));
+
+      console.log('[NewClient] Initial dynamic data loaded');
     } catch (error) {
-      console.error('[NewClient] Failed to load branches:', error);
-      Alert.alert('Error', 'Failed to load branches. Please try again.');
+      console.error('[NewClient] Failed to load initial data:', error);
+      Alert.alert('Error', 'Failed to load initial form data. Please try again.');
     } finally {
       setLoadingBranches(false);
     }
   }, []);
+
+  // Fetch titles when gender and language change
+  useEffect(() => {
+    if (selectedGender && selectedLanguage) {
+      getTitles(selectedGender.id, selectedLanguage.id)
+        .then(data => {
+          setTitles((Array.isArray(data) ? data : []).map((t: any) => ({ id: t.TitleID || t.Name || t.id, label: t.Name || t.label })));
+        })
+        .catch(err => console.error('Failed to load titles', err));
+    } else {
+      setTitles([]);
+    }
+  }, [selectedGender, selectedLanguage]);
+
+  useEffect(() => {
+    if (mmSelectedGender && mmSelectedLanguage) {
+      getTitles(mmSelectedGender.id, mmSelectedLanguage.id)
+        .then(data => {
+          setMmTitles((Array.isArray(data) ? data : []).map((t: any) => ({ id: t.TitleID || t.Name || t.id, label: t.Name || t.label })));
+        })
+        .catch(err => console.error('Failed to load main member titles', err));
+    } else {
+      setMmTitles([]);
+    }
+  }, [mmSelectedGender, mmSelectedLanguage]);
+
+  // Fetch medical aid plans when medical aid changes
+  useEffect(() => {
+    if (medicalAid) {
+      getMedicalAidPlans(medicalAid.id)
+        .then(data => {
+          setMedicalAidPlans((Array.isArray(data) ? data : []).map((p: any) => ({ id: p.MedicalAidPlanID || p.Name || p.id, label: p.Name || p.label })));
+        })
+        .catch(err => console.error('Failed to load medical aid plans', err));
+    } else {
+      setMedicalAidPlans([]);
+    }
+  }, [medicalAid]);
+
+  useEffect(() => {
+    if (mmMedicalAid) {
+      getMedicalAidPlans(mmMedicalAid.id)
+        .then(data => {
+          setMmMedicalAidPlans((Array.isArray(data) ? data : []).map((p: any) => ({ id: p.MedicalAidPlanID || p.Name || p.id, label: p.Name || p.label })));
+        })
+        .catch(err => console.error('Failed to load main member medical aid plans', err));
+    } else {
+      setMmMedicalAidPlans([]);
+    }
+  }, [mmMedicalAid]);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (event.type === 'dismissed') {
@@ -214,43 +262,35 @@ export default function NewClientScreen() {
       setLoading(true);
       console.log('[NewClient] Creating new client');
 
-      const credentials = await getHeardatCredentials();
-
-      const baseParams = {
-        CompanyID: credentials.companyId || '0',
-        Active: '1',
-        Deleted: '0',
-      };
-
       const clientData: Record<string, string> = {
-        ...baseParams,
-        FirstName: firstName,
+        PatientID: "0",
         LastName: lastName,
-        Name: firstName,
-        Surname: lastName,
-        Initials: initials,
+        FirstName: firstName,
+        NickName: "",
         IDNumber: idNumber,
         DateOfBirth: formatDate(dateOfBirth),
+        Home: "",
         Cell: cellphoneNumber,
         Email: email,
         Gender: selectedGender?.id || '',
-        Language: selectedLanguage?.id || '',
-        Title: selectedTitle?.id || '',
+        TitleID: selectedTitle?.id || '',
+        LanguageID: selectedLanguage?.id || '',
         BranchID: selectedBranch.id,
-        MedicalAid: medicalAid, 
-        MedicalAidID: '0', 
-        MedicalAidPlan: medicalAidPlan,
-        MemberNumber: memberNumber,
-        MainMember: '0', 
+        MedicalAidID: medicalAid?.id || '0',
+        MedicalAidPlanID: medicalAidPlan?.id || '0',
+        MemberNo: memberNumber,
+        CompanyName: "",
+        SpecialNote: "",
+        MainMember: selectedMainMember?.id === 'Yes' ? '1' : '0',
+        Intials: initials,
+        DepCode: "",
+        Occupation: "",
+        Agree: "1"
       };
-
-      if (selectedMainMember.id === 'Yes') {
-        clientData.MainMember = '1';
-      }
 
       console.log('[NewClient] Client data:', clientData);
 
-      const response = await heardatApiCall('Patients', clientData, 'POST');
+      const response = await createNewPatient(clientData);
 
       if (!response || 
           (typeof response === 'object' && (response.error || response.status === 'error' || response.success === false)) ||
@@ -264,28 +304,32 @@ export default function NewClientScreen() {
       if (isNotMainMember) {
         console.log('[NewClient] User is not main member. Creating Main Member patient record...');
         const mainMemberData: Record<string, string> = {
-           ...baseParams,
-           FirstName: mmFirstName,
-           LastName: mmLastName,
-           Name: mmFirstName,
-           Surname: mmLastName,
-           Initials: mmInitials,
-           IDNumber: mmIdNumber,
-           DateOfBirth: formatDate(mmDateOfBirth),
-           Cell: mmCellphoneNumber,
-           Email: mmEmail,
-           Gender: mmSelectedGender?.id || '',
-           Language: mmSelectedLanguage?.id || '',
-           Title: mmSelectedTitle?.id || '',
-           BranchID: mmSelectedBranch?.id || selectedBranch.id,
-           MedicalAid: mmMedicalAid,
-           MedicalAidID: '0',
-           MedicalAidPlan: mmMedicalAidPlan,
-           MemberNumber: mmMemberNumber,
-           MainMember: '1',
+          PatientID: "0",
+          LastName: mmLastName,
+          FirstName: mmFirstName,
+          NickName: "",
+          IDNumber: mmIdNumber,
+          DateOfBirth: formatDate(mmDateOfBirth),
+          Home: "",
+          Cell: mmCellphoneNumber,
+          Email: mmEmail,
+          Gender: mmSelectedGender?.id || '',
+          TitleID: mmSelectedTitle?.id || '',
+          LanguageID: mmSelectedLanguage?.id || '',
+          BranchID: mmSelectedBranch?.id || selectedBranch.id, // Fallback to main branch
+          MedicalAidID: mmMedicalAid?.id || '0',
+          MedicalAidPlanID: mmMedicalAidPlan?.id || '0',
+          MemberNo: mmMemberNumber,
+          CompanyName: "",
+          SpecialNote: "",
+          MainMember: "1",
+          Intials: mmInitials,
+          DepCode: "",
+          Occupation: "",
+          Agree: "1"
         };
 
-        const mmResponse = await heardatApiCall('Patients', mainMemberData, 'POST');
+        const mmResponse = await createNewPatient(mainMemberData);
         
         if (!mmResponse || 
             (typeof mmResponse === 'object' && (mmResponse.error || mmResponse.status === 'error' || mmResponse.success === false)) ||
@@ -500,12 +544,12 @@ export default function NewClientScreen() {
           {renderDatePicker('Date of Birth', dateOfBirth, showDatePicker, () => setShowDatePicker(true), handleDateChange)}
           {renderTextInput('Cellphone Number *', cellphoneNumber, setCellphoneNumber, 'Enter cellphone number', 'phone-pad')}
           {renderTextInput('Email', email, setEmail, 'Enter email address', 'email-address')}
-          {renderDropdown('Gender', selectedGender, GENDER_OPTIONS, setSelectedGender, 'gender')}
-          {renderDropdown('Language', selectedLanguage, LANGUAGE_OPTIONS, setSelectedLanguage, 'language')}
-          {renderDropdown('Title', selectedTitle, TITLE_OPTIONS, setSelectedTitle, 'title')}
+          {renderDropdown('Gender', selectedGender, genders, setSelectedGender, 'gender')}
+          {renderDropdown('Language', selectedLanguage, languages, setSelectedLanguage, 'language')}
+          {renderDropdown('Title', selectedTitle, titles, setSelectedTitle, 'title')}
           {renderDropdown('Branch *', selectedBranch, branches, setSelectedBranch, 'branch')}
-          {renderTextInput('Medical Aid', medicalAid, setMedicalAid, 'Enter medical aid name')}
-          {renderTextInput('Medical Aid Plan', medicalAidPlan, setMedicalAidPlan, 'Enter medical aid plan')}
+          {renderDropdown('Medical Aid', medicalAid, medicalAids, setMedicalAid, 'medicalAid')}
+          {renderDropdown('Medical Aid Plan', medicalAidPlan, medicalAidPlans, setMedicalAidPlan, 'medicalAidPlan')}
           {renderTextInput('Member Number', memberNumber, setMemberNumber, 'Enter member number')}
           {renderDropdown('Main Member *', selectedMainMember, MAIN_MEMBER_OPTIONS, setSelectedMainMember, 'mainMember')}
         </View>
@@ -521,12 +565,12 @@ export default function NewClientScreen() {
             {renderDatePicker('Date of Birth', mmDateOfBirth, showMmDatePicker, () => setShowMmDatePicker(true), handleMmDateChange)}
             {renderTextInput('Cellphone Number', mmCellphoneNumber, setMmCellphoneNumber, 'Enter cellphone number', 'phone-pad')}
             {renderTextInput('Email', mmEmail, setMmEmail, 'Enter email address', 'email-address')}
-            {renderDropdown('Gender', mmSelectedGender, GENDER_OPTIONS, setMmSelectedGender, 'mmGender')}
-            {renderDropdown('Language', mmSelectedLanguage, LANGUAGE_OPTIONS, setMmSelectedLanguage, 'mmLanguage')}
-            {renderDropdown('Title', mmSelectedTitle, TITLE_OPTIONS, setMmSelectedTitle, 'mmTitle')}
+            {renderDropdown('Gender', mmSelectedGender, genders, setMmSelectedGender, 'mmGender')}
+            {renderDropdown('Language', mmSelectedLanguage, languages, setMmSelectedLanguage, 'mmLanguage')}
+            {renderDropdown('Title', mmSelectedTitle, mmTitles, setMmSelectedTitle, 'mmTitle')}
             {renderDropdown('Branch', mmSelectedBranch, branches, setMmSelectedBranch, 'mmBranch')}
-            {renderTextInput('Medical Aid', mmMedicalAid, setMmMedicalAid, 'Enter medical aid name')}
-            {renderTextInput('Medical Aid Plan', mmMedicalAidPlan, setMmMedicalAidPlan, 'Enter medical aid plan')}
+            {renderDropdown('Medical Aid', mmMedicalAid, medicalAids, setMmMedicalAid, 'mmMedicalAid')}
+            {renderDropdown('Medical Aid Plan', mmMedicalAidPlan, mmMedicalAidPlans, setMmMedicalAidPlan, 'mmMedicalAidPlan')}
             {renderTextInput('Member Number', mmMemberNumber, setMmMemberNumber, 'Enter member number')}
           </View>
         )}

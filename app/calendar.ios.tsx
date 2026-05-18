@@ -595,7 +595,14 @@ export default function CalendarScreen() {
         </View>
       )}
 
-      <FABMenu />
+      <FABMenu 
+        onCreateAppointment={() => {
+          router.push({
+            pathname: '/create-appointment',
+            params: { selectedDate }
+          });
+        }}
+      />
 
       <SideNav visible={sideNavVisible} onClose={() => setSideNavVisible(false)} />
     </SafeAreaView>
