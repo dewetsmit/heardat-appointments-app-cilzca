@@ -25,6 +25,7 @@ interface Appointment {
   audiologistId?: string;
   Type?: string;
   audiologistName?: string;
+  Procedures_Name?: string;
 }
 
 interface CalendarWeekViewProps {
@@ -35,12 +36,12 @@ interface CalendarWeekViewProps {
   onDayPress?: (date: string) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
-  refreshControl?: React.ReactElement;
+  refreshControl?: React.ReactElement<any>;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_COLUMN_WIDTH = 60;
-const SLOT_HEIGHT = 60;
+const SLOT_HEIGHT = 180;
 const START_HOUR = 6; // 6am
 const END_HOUR = 19; // 7pm (19:00)
 
@@ -470,18 +471,21 @@ export function CalendarWeekView({
                                     top: position.top,
                                     left: leftOffset,
                                     width: appointmentWidth - 2,
-                                    height: Math.max(position.height, 30),
+                                    height: Math.max(position.height, 50),
                                     backgroundColor: color,
                                   },
                                 ]}
                                 onPress={() => onAppointmentPress?.(appointment)}
                                 activeOpacity={0.7}
                               >
-                                <Text style={styles.appointmentTime} numberOfLines={1}>
+                                <Text style={styles.appointmentTime}>
                                   {timeText}
                                 </Text>
-                                <Text style={styles.appointmentClient} numberOfLines={1}>
+                                <Text style={styles.appointmentClient}>
                                   {appointment.FirstName} {appointment.LastName}
+                                </Text>
+                                <Text style={styles.appointmentClient}>
+                                  {appointment.Procedures_Name}
                                 </Text>
                               </TouchableOpacity>
                             );

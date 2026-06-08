@@ -211,7 +211,6 @@ export default function CalendarScreen() {
   function onDayPress(day: any) {
     console.log('[Calendar] Day pressed:', day.dateString);
     setSelectedDate(day.dateString);
-    setViewMode('day');
   }
 
   function handleDayPressFromWeek(date: string) {

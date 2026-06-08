@@ -60,6 +60,7 @@ export default function AppointmentDetailScreen() {
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
   const [audiologists, setAudiologists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingNotes, setLoadingNotes] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -82,6 +83,7 @@ export default function AppointmentDetailScreen() {
 
     try {
       setLoading(true);
+      setLoadingNotes(true);
 
       const params = {
         AppointmentID: appointmentId,
@@ -98,7 +100,7 @@ export default function AppointmentDetailScreen() {
       const appointments = parsedData.appointments || parsedData;
 
       if (Array.isArray(appointments) && appointments.length > 0) {
-        const appointmentData = appointments[0];
+        const appointmentData = { ...appointments[0] };
 
         // Merge passedClientName from calendar view if API payload does not have name fields
         const hasApiName = appointmentData.ClientName || appointmentData.FirstName || appointmentData.LastName;
@@ -118,35 +120,10 @@ export default function AppointmentDetailScreen() {
           appointmentData.AssistantName = `${assistantFirstName || ''} ${assistantLastName || ''}`.trim();
         }
 
-        // Fetch users for mapping notes
-        try {
-          const usersRes = await getUsers();
-          setAudiologists(usersRes);
-        } catch (err) {
-          console.error('[AppointmentDetail] Failed to load users', err);
-        }
-
-        // Fetch notes
-        try {
-          const notesRes = await getAppointmentNotes(appointmentId);
-          const parsedNotes = typeof notesRes === 'string' ? JSON.parse(notesRes) : notesRes;
-          console.log('[AppointmentDetail] Notes loaded:', parsedNotes.notes);
-          if (parsedNotes && parsedNotes.notes && Array.isArray(parsedNotes.notes)) {
-            const validNotes = parsedNotes.notes.filter((n: any) => n && (n.Note || n.Notes));
-            appointmentData.NotesList = validNotes;
-
-            if (validNotes.length > 0) {
-              appointmentData.Notes = validNotes.map((n: any) => n.Note || n.Notes).join('\n\n---\n\n');
-            }
-          }
-        } catch (noteErr) {
-          console.error('[AppointmentDetail] Failed to load notes', noteErr);
-        }
-
         // Map ProcedureName from context procedures
         if (appointmentData.ProcedureID && procedures && procedures.length > 0) {
-          const procedure = procedures.find((p: any) => 
-            String(p.ProcedureID) === String(appointmentData.ProcedureID) || 
+          const procedure = procedures.find((p: any) =>
+            String(p.ProcedureID) === String(appointmentData.ProcedureID) ||
             String(p.id) === String(appointmentData.ProcedureID)
           );
           if (procedure) {
@@ -154,15 +131,59 @@ export default function AppointmentDetailScreen() {
           }
         }
 
-        console.log('[AppointmentDetail] Appointment loaded:', appointmentData);
+        console.log('[AppointmentDetail] Main details loaded, displaying immediately:', appointmentData);
         setAppointment(appointmentData);
+        setLoading(false);
+
+        // Kick off notes and users fetching in the background
+        loadNotesAndUsers(appointmentId);
       } else {
         console.error('[AppointmentDetail] No appointment found');
+        setLoading(false);
       }
     } catch (error) {
       console.error('[AppointmentDetail] Error loading appointment:', error);
-    } finally {
       setLoading(false);
+    }
+  };
+
+  const loadNotesAndUsers = async (apptId: string) => {
+    try {
+      // Fetch users for mapping notes
+      try {
+        const usersRes = await getUsers();
+        setAudiologists(usersRes);
+      } catch (err) {
+        console.error('[AppointmentDetail] Failed to load users in background', err);
+      }
+
+      // Fetch notes
+      try {
+        const notesRes = await getAppointmentNotes(apptId);
+        const parsedNotes = typeof notesRes === 'string' ? JSON.parse(notesRes) : notesRes;
+        console.log('[AppointmentDetail] Notes loaded in background:', parsedNotes.notes);
+        if (parsedNotes && parsedNotes.notes && Array.isArray(parsedNotes.notes)) {
+          const validNotes = parsedNotes.notes.filter((n: any) => n && (n.Note || n.Notes));
+
+          let notesString = '';
+          if (validNotes.length > 0) {
+            notesString = validNotes.map((n: any) => n.Note || n.Notes).join('\n\n---\n\n');
+          }
+
+          setAppointment(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              NotesList: validNotes,
+              Notes: notesString,
+            };
+          });
+        }
+      } catch (noteErr) {
+        console.error('[AppointmentDetail] Failed to load notes in background', noteErr);
+      }
+    } finally {
+      setLoadingNotes(false);
     }
   };
 
@@ -605,7 +626,14 @@ export default function AppointmentDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             Notes
           </Text>
-          {appointment.NotesList && appointment.NotesList.length > 0 ? (
+          {loadingNotes ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 }}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={{ fontSize: 14, color: theme.dark ? '#98989D' : '#666' }}>
+                Fetching notes... This takes up to 10 seconds
+              </Text>
+            </View>
+          ) : appointment.NotesList && appointment.NotesList.length > 0 ? (
             appointment.NotesList.map((note, index) => {
               const userIdMatch = note.UserID || note.userid;
               const user = audiologists.find(u => String(u.UserID) === String(userIdMatch) || String(u.id) === String(userIdMatch));

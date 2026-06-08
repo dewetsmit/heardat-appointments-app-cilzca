@@ -26,6 +26,7 @@ interface Appointment {
   audiologistName?: string;
   FirstName?: string;
   LastName?: string;
+  Procedures_Name?: string;
 }
 
 interface CalendarDayViewProps {
@@ -35,7 +36,7 @@ interface CalendarDayViewProps {
   onAppointmentPress?: (appointment: Appointment) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
-  refreshControl?: React.ReactElement;
+  refreshControl?: React.ReactElement<any>;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -94,8 +95,16 @@ export function CalendarDayView({
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
-  // Calculate slot height based on interval (60 minutes = 60px baseline)
-  const slotHeight = slotInterval;
+  // Calculate slot height based on interval to ensure each slot is always big enough for all lines of info
+  const slotHeight = (() => {
+    switch (slotInterval) {
+      case 15: return 90;   // 6.0 px/min (15 min slot is 90px tall)
+      case 30: return 150;  // 5.0 px/min (30 min slot is 150px tall)
+      case 60: return 240;  // 4.0 px/min (60 min slot is 240px tall)
+      case 120: return 360; // 3.0 px/min (120 min slot is 360px tall)
+      default: return slotInterval * 4;
+    }
+  })();
 
   // Separate full-day events from regular appointments
   const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
@@ -314,33 +323,33 @@ export function CalendarDayView({
         <View style={{ flex: 1, overflow: 'hidden' }}>
           <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: Animated.multiply(scrollX, -1) }] }}>
             {selectedAudiologists.map((audiologist, index) => {
-          const color = getAudiologistColor(index);
-          const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
+              const color = getAudiologistColor(index);
+              const appointmentCount = appointmentsByAudiologist[audiologist.user_id]?.length || 0;
 
-          return (
-            <TouchableOpacity
-              key={audiologist.user_id}
-              style={[styles.audiologistHeader, { width: columnWidth }]}
-              onPress={() => {
-                console.log('[CalendarDayView] Legend tapped for:', audiologist.full_name);
-                setLegendModalVisible(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.audiologistColorDot, { backgroundColor: color }]} />
-              <Text style={[styles.audiologistName, { color: theme.colors.text }]} numberOfLines={1}>
-                {audiologist.full_name}
-              </Text>
-              {appointmentCount > 0 && (
-                <View style={[styles.appointmentCountBadge, { backgroundColor: color }]}>
-                  <Text style={styles.appointmentCountText}>
-                    {appointmentCount}
+              return (
+                <TouchableOpacity
+                  key={audiologist.user_id}
+                  style={[styles.audiologistHeader, { width: columnWidth }]}
+                  onPress={() => {
+                    console.log('[CalendarDayView] Legend tapped for:', audiologist.full_name);
+                    setLegendModalVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.audiologistColorDot, { backgroundColor: color }]} />
+                  <Text style={[styles.audiologistName, { color: theme.colors.text }]} numberOfLines={1}>
+                    {audiologist.full_name}
                   </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+                  {appointmentCount > 0 && (
+                    <View style={[styles.appointmentCountBadge, { backgroundColor: color }]}>
+                      <Text style={styles.appointmentCountText}>
+                        {appointmentCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </Animated.View>
         </View>
       </View>
@@ -378,66 +387,72 @@ export function CalendarDayView({
           >
             <View style={styles.columnsContainer}>
               {selectedAudiologists.map((audiologist, audiologistIndex) => {
-              const color = getAudiologistColor(audiologistIndex);
-              const audiologistAppointments = appointmentsByAudiologist[audiologist.user_id] || [];
+                const color = getAudiologistColor(audiologistIndex);
+                const audiologistAppointments = appointmentsByAudiologist[audiologist.user_id] || [];
 
-              return (
-                <View key={audiologist.user_id} style={[styles.audiologistColumn, { width: columnWidth }]}>
-                  {/* Grid lines */}
-                  {timeSlots.map((slot, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.gridLine,
-                        { height: slotHeight, borderTopColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
-                      ]}
-                    />
-                  ))}
-
-                  {/* Current time indicator */}
-                  {showCurrentTimeIndicator && (
-                    <View
-                      style={[
-                        styles.currentTimeIndicator,
-                        { top: currentTimePosition, backgroundColor: theme.colors.primary },
-                      ]}
-                    />
-                  )}
-
-                  {/* Appointments */}
-                  {audiologistAppointments.map((appointment) => {
-                    console.log('[APPOINTMENT]', appointment);
-                    const position = getAppointmentPosition(appointment);
-                    const DateStringToDate = new Date(appointment.DateAppointment);
-                    const time = { hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes() };
-                    const timeText = formatTimeDisplay(time.hour, time.minute);
-
-                    return (
-                      <TouchableOpacity
-                        key={appointment.AppointmentID}
+                return (
+                  <View key={audiologist.user_id} style={[styles.audiologistColumn, { width: columnWidth }]}>
+                    {/* Grid lines */}
+                    {timeSlots.map((slot, index) => (
+                      <View
+                        key={index}
                         style={[
-                          styles.appointmentBlock,
-                          {
-                            top: position.top,
-                            height: Math.max(position.height, 40),
-                            backgroundColor: color,
-                          },
+                          styles.gridLine,
+                          { height: slotHeight, borderTopColor: theme.dark ? '#2C2C2E' : '#E5E5EA' },
                         ]}
-                        onPress={() => onAppointmentPress?.(appointment)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.appointmentTime} numberOfLines={1}>
-                          {timeText}
-                        </Text>
-                        <Text style={styles.appointmentClient} numberOfLines={2}>
-                          {appointment.FirstName} {appointment.LastName}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              );
-            })}
+                      />
+                    ))}
+
+                    {/* Current time indicator */}
+                    {showCurrentTimeIndicator && (
+                      <View
+                        style={[
+                          styles.currentTimeIndicator,
+                          { top: currentTimePosition, backgroundColor: theme.colors.primary },
+                        ]}
+                      />
+                    )}
+
+                    {/* Appointments */}
+                    {audiologistAppointments.map((appointment) => {
+                      console.log('[APPOINTMENT]', appointment);
+                      const position = getAppointmentPosition(appointment);
+                      const DateStringToDate = new Date(appointment.DateAppointment);
+                      const time = { hour: DateStringToDate.getHours(), minute: DateStringToDate.getMinutes() };
+                      const timeText = formatTimeDisplay(time.hour, time.minute);
+
+                      return (
+                        <TouchableOpacity
+                          key={appointment.AppointmentID}
+                          style={[
+                            styles.appointmentBlock,
+                            {
+                              top: position.top,
+                              height: Math.max(position.height, 75),
+                              backgroundColor: color,
+                            },
+                          ]}
+                          onPress={() => onAppointmentPress?.(appointment)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.appointmentTime}>
+                            {timeText}
+                          </Text>
+                          <Text style={styles.appointmentClient}>
+                            {appointment.FirstName} {appointment.LastName}
+                          </Text>
+                          <Text style={styles.appointmentClient}>
+                            {appointment.Type}
+                          </Text>
+                          <Text style={styles.appointmentClient}>
+                            {appointment.Procedures_Name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })}
             </View>
           </Animated.ScrollView>
         </View>
