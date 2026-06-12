@@ -24,7 +24,7 @@ export const isBackendConfigured = (): boolean => {
 /**
  * Platform-specific storage
  */
-const storage = Platform.OS === "web"
+export const storage = Platform.OS === "web"
   ? {
     getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
     setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),

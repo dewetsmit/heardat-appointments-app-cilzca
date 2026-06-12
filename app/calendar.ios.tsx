@@ -192,13 +192,18 @@ export default function CalendarScreen() {
     }
 
     try {
-      const parts = timeString.split(':');
+      let extractedTime = timeString;
+      if (extractedTime.includes('T')) {
+        extractedTime = extractedTime.split('T')[1];
+      } else if (extractedTime.includes(' ')) {
+        extractedTime = extractedTime.split(' ')[1];
+      }
+
+      const parts = extractedTime.split(':');
       if (parts.length >= 2) {
-        const hours = parseInt(parts[0], 10);
-        const minutes = parts[1];
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const displayHours = hours % 12 || 12;
-        return `${displayHours}:${minutes} ${ampm}`;
+        const hours = parseInt(parts[0], 10).toString().padStart(2, '0');
+        const minutes = parts[1].padStart(2, '0');
+        return `${hours}:${minutes}`;
       }
     } catch (err) {
       console.error('[Calendar] Error formatting time:', err);
@@ -300,6 +305,30 @@ export default function CalendarScreen() {
       return aptDate === selectedDate;
     });
   }, [appointments, selectedDate]);
+
+  // Group appointments by audiologistName
+  const groupedAppointments = useMemo(() => {
+    const groups: { [key: string]: HeardatAppointment[] } = {};
+    
+    selectedDateAppointments.forEach((apt) => {
+      const name = apt.audiologistName || 'Unassigned';
+      if (!groups[name]) {
+        groups[name] = [];
+      }
+      groups[name].push(apt);
+    });
+    
+    return Object.keys(groups)
+      .sort((a, b) => {
+        if (a === 'Unassigned') return 1;
+        if (b === 'Unassigned') return -1;
+        return a.localeCompare(b);
+      })
+      .map((name) => ({
+        audiologistName: name,
+        appointments: groups[name],
+      }));
+  }, [selectedDateAppointments]);
 
   const noAudiologistsSelectedText = 'No audiologists selected';
   const selectAudiologistsText = 'Please select audiologists from the dropdown above';
@@ -510,51 +539,65 @@ export default function CalendarScreen() {
                     </Text>
                   </View>
                 ) : (
-                  selectedDateAppointments.map((apt) => {
-                    const timeText = formatTime(apt.DateAppointment);
+                  groupedAppointments.map((group) => {
+                    const firstApt = group.appointments[0];
+                    const audiologistId = firstApt?.audiologistId;
+                    const color = audiologistId ? getAudiologistColorForDot(audiologistId) : theme.colors.primary;
 
                     return (
-                      <TouchableOpacity
-                        key={apt.AppointmentID}
-                        style={[styles.appointmentCard, { backgroundColor: theme.colors.card }]}
-                        onPress={() => handleAppointmentPress(apt)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.appointmentHeader}>
-                          <Text style={[styles.appointmentTime, { color: theme.colors.primary }]}>
-                            {timeText}
+                      <View key={group.audiologistName} style={styles.audiologistGroupContainer}>
+                        <View style={[styles.audiologistGroupHeader, { borderLeftColor: color, backgroundColor: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                          <IconSymbol
+                            ios_icon_name="person.fill"
+                            android_material_icon_name="person"
+                            size={16}
+                            color={color}
+                          />
+                          <Text style={[styles.audiologistGroupTitle, { color: theme.colors.text }]}>
+                            {group.audiologistName}
                           </Text>
-                          {apt.Duration && (
-                            <Text style={[styles.appointmentDuration, { color: theme.dark ? '#98989D' : '#666' }]}>
-                              {apt.Duration}
-                            </Text>
-                          )}
-                        </View>
-
-                        <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
-                          {apt.FirstName + " " + apt.LastName}
-                        </Text>
-
-                        {apt.audiologistName && (
-                          <View style={styles.appointmentDetail}>
-                            <IconSymbol
-                              ios_icon_name="person.fill"
-                              android_material_icon_name="person"
-                              size={14}
-                              color={theme.dark ? '#98989D' : '#666'}
-                            />
-                            <Text style={[styles.appointmentDetailText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                              {apt.audiologistName}
+                          <View style={[styles.audiologistGroupBadge, { backgroundColor: `${color}20` }]}>
+                            <Text style={[styles.audiologistGroupBadgeText, { color: color }]}>
+                              {group.appointments.length}
                             </Text>
                           </View>
-                        )}
+                        </View>
+                        <View style={styles.audiologistGroupList}>
+                          {group.appointments.map((apt) => {
+                            const timeText = formatTime(apt.DateAppointment);
 
-                        {apt.Notes && (
-                          <Text style={[styles.appointmentNotes, { color: theme.dark ? '#98989D' : '#666' }]}>
-                            {apt.Notes}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
+                            return (
+                              <TouchableOpacity
+                                key={apt.AppointmentID}
+                                style={[styles.appointmentCard, { backgroundColor: theme.colors.card }]}
+                                onPress={() => handleAppointmentPress(apt)}
+                                activeOpacity={0.7}
+                              >
+                                <View style={styles.appointmentHeader}>
+                                  <Text style={[styles.appointmentTime, { color: theme.colors.primary }]}>
+                                    {timeText}
+                                  </Text>
+                                  {apt.Duration && (
+                                    <Text style={[styles.appointmentDuration, { color: theme.dark ? '#98989D' : '#666' }]}>
+                                      {apt.Duration}
+                                    </Text>
+                                  )}
+                                </View>
+
+                                <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
+                                  {apt.FirstName + " " + apt.LastName}
+                                </Text>
+
+                                {apt.Notes && (
+                                  <Text style={[styles.appointmentNotes, { color: theme.dark ? '#98989D' : '#666' }]}>
+                                    {apt.Notes}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
                     );
                   })
                 )}
@@ -741,5 +784,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  audiologistGroupContainer: {
+    marginBottom: 20,
+  },
+  audiologistGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderRadius: 4,
+    gap: 8,
+  },
+  audiologistGroupTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  audiologistGroupBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  audiologistGroupBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  audiologistGroupList: {
+    gap: 12,
   },
 });

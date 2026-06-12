@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { Audiologist } from '@/types';
+import { storage } from '@/utils/api';
 
 interface Appointment {
   AppointmentID: string;
@@ -92,6 +93,23 @@ export function CalendarDayView({
   const [slotInterval, setSlotInterval] = useState(60); // Current interval in minutes
   const [legendModalVisible, setLegendModalVisible] = useState(false);
   const [intervalModalVisible, setIntervalModalVisible] = useState(false);
+
+  useEffect(() => {
+    const loadTimeSlotPreference = async () => {
+      try {
+        const storedVal = await storage.getItem('TimeSlotSize');
+        if (storedVal) {
+          const parsedVal = parseInt(storedVal, 10);
+          if ([15, 30, 60, 120].includes(parsedVal)) {
+            setSlotInterval(parsedVal);
+          }
+        }
+      } catch (error) {
+        console.error('[CalendarDayView] Failed to load TimeSlotSize preference:', error);
+      }
+    };
+    loadTimeSlotPreference();
+  }, []);
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
@@ -205,10 +223,15 @@ export function CalendarDayView({
     return AUDIOLOGIST_COLORS[index % AUDIOLOGIST_COLORS.length];
   };
 
-  const handleIntervalChange = (newInterval: number) => {
+  const handleIntervalChange = async (newInterval: number) => {
     console.log('[CalendarDayView] Changing slot interval to:', newInterval, 'minutes');
     setSlotInterval(newInterval);
     setIntervalModalVisible(false);
+    try {
+      await storage.setItem('TimeSlotSize', newInterval.toString());
+    } catch (error) {
+      console.error('[CalendarDayView] Failed to save TimeSlotSize preference:', error);
+    }
   };
 
   return (

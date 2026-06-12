@@ -96,7 +96,6 @@ export default function CreateAppointmentScreen() {
 
   const [duration, setDuration] = useState(30);
   const [sendReminders, setSendReminders] = useState(true);
-  const [repeatAppointment, setRepeatAppointment] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesId, setNotesId] = useState('0');
 
@@ -371,14 +370,6 @@ export default function CreateAppointmentScreen() {
     }
   };
 
-  const doubleBookingAlert = useCallback(() => {
-    Alert.alert(
-      'Double Booking Detected',
-      'This appointment overlaps with an existing appointment. Please choose a different time.',
-      [{ text: 'OK' }]
-    );
-  }, []);
-
   const createAppointment = useCallback(async () => {
     const credentials = await getHeardatCredentials();
     console.log('[CreateAppointment] Creating appointment');
@@ -521,6 +512,17 @@ export default function CreateAppointmentScreen() {
       setSubmitting(false);
     }
   }, [date, time, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router, isEditMode, editAppointmentId, notes, notesId, showUntilDate, untilDate, selectedAppointmentType]);
+
+  const doubleBookingAlert = useCallback(() => {
+    Alert.alert(
+      'Double Booking Detected',
+      'This appointment overlaps with an existing appointment. Do you want to continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => createAppointment() }
+      ]
+    );
+  }, [createAppointment]);
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
@@ -1228,30 +1230,6 @@ export default function CreateAppointmentScreen() {
             </View>
           </View>
 
-          {/* Repeat Appointment Toggle */}
-          <View style={styles.fieldContainer}>
-            <View style={styles.toggleRow}>
-              <Text style={[styles.label, { color: colors.text }]}>Repeat appointment</Text>
-              <TouchableOpacity
-                style={[
-                  styles.toggle,
-                  repeatAppointment ? styles.toggleActive : styles.toggleInactive,
-                  { borderColor: colors.border }
-                ]}
-                onPress={() => {
-                  console.log('[CreateAppointment] Repeat appointment toggled:', !repeatAppointment);
-                  setRepeatAppointment(!repeatAppointment);
-                }}
-              >
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    repeatAppointment ? styles.toggleThumbActive : styles.toggleThumbInactive
-                  ]}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
 
           {/* Notes */}
           <View style={styles.fieldContainer}>

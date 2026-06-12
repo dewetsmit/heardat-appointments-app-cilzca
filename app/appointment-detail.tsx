@@ -268,11 +268,9 @@ export default function AppointmentDetailScreen() {
 
       const parts = extractedTime.split(':');
       if (parts.length >= 2) {
-        const hours = parseInt(parts[0], 10);
-        const minutes = parts[1];
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const displayHours = hours % 12 || 12;
-        return `${displayHours}:${minutes}`;
+        const hours = parseInt(parts[0], 10).toString().padStart(2, '0');
+        const minutes = parts[1].padStart(2, '0');
+        return `${hours}:${minutes}`;
       }
     } catch (err) {
       console.error('[AppointmentDetail] Error formatting time:', err);

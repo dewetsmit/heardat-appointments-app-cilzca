@@ -97,7 +97,6 @@ export default function CreateAppointmentScreen() {
 
   const [duration, setDuration] = useState(30);
   const [sendReminders, setSendReminders] = useState(true);
-  const [repeatAppointment, setRepeatAppointment] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesId, setNotesId] = useState('0');
   const [existingNotes, setExistingNotes] = useState<any[]>([]);
@@ -121,6 +120,12 @@ export default function CreateAppointmentScreen() {
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isDoubleBookingWarning, setIsDoubleBookingWarning] = useState(false);
+
+  const dismissErrorModal = () => {
+    setErrorMessage(null);
+    setIsDoubleBookingWarning(false);
+  };
 
   const loadFormData = useCallback(async () => {
     console.log('[CreateAppointment] Loading form data');
@@ -415,7 +420,8 @@ export default function CreateAppointmentScreen() {
   };
 
   const doubleBookingAlert = useCallback(() => {
-    setErrorMessage('This appointment overlaps with an existing appointment. Please choose a different time.');
+    setIsDoubleBookingWarning(true);
+    setErrorMessage('This appointment overlaps with an existing appointment. Do you want to continue?');
   }, []);
 
   const createAppointment = useCallback(async () => {
@@ -1279,30 +1285,6 @@ export default function CreateAppointmentScreen() {
             </View>
           </View>
 
-          {/* Repeat Appointment Toggle */}
-          <View style={styles.fieldContainer}>
-            <View style={styles.toggleRow}>
-              <Text style={[styles.label, { color: colors.text }]}>Repeat appointment</Text>
-              <TouchableOpacity
-                style={[
-                  styles.toggle,
-                  repeatAppointment ? styles.toggleActive : styles.toggleInactive,
-                  { borderColor: colors.border }
-                ]}
-                onPress={() => {
-                  console.log('[CreateAppointment] Repeat appointment toggled:', !repeatAppointment);
-                  setRepeatAppointment(!repeatAppointment);
-                }}
-              >
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    repeatAppointment ? styles.toggleThumbActive : styles.toggleThumbInactive
-                  ]}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
 
           {/* Notes */}
           <View style={styles.fieldContainer}>
@@ -1367,12 +1349,12 @@ export default function CreateAppointmentScreen() {
         visible={errorMessage !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setErrorMessage(null)}
+        onRequestClose={dismissErrorModal}
       >
         <TouchableOpacity
           style={styles.errorModalOverlay}
           activeOpacity={1}
-          onPress={() => setErrorMessage(null)}
+          onPress={dismissErrorModal}
         >
           <TouchableOpacity activeOpacity={1} style={[styles.errorModalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <IconSymbol
@@ -1381,14 +1363,37 @@ export default function CreateAppointmentScreen() {
               size={40}
               color="#E74C3C"
             />
-            <Text style={[styles.errorModalTitle, { color: colors.text }]}>Oops! Something went wrong.</Text>
+            <Text style={[styles.errorModalTitle, { color: colors.text }]}>
+              {isDoubleBookingWarning ? 'Double Booking Warning' : 'Oops! Something went wrong.'}
+            </Text>
             <Text style={[styles.errorModalMessage, { color: colors.text }]}>{errorMessage}</Text>
-            <TouchableOpacity
-              style={styles.errorModalButton}
-              onPress={() => setErrorMessage(null)}
-            >
-              <Text style={styles.errorModalButtonText}>Dismiss</Text>
-            </TouchableOpacity>
+            {isDoubleBookingWarning ? (
+              <View style={styles.errorModalButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.errorModalCancelButton, { borderColor: colors.border }]}
+                  onPress={dismissErrorModal}
+                >
+                  <Text style={[styles.errorModalCancelButtonText, { color: colors.text }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.errorModalContinueButton}
+                  onPress={() => {
+                    setErrorMessage(null);
+                    setIsDoubleBookingWarning(false);
+                    createAppointment();
+                  }}
+                >
+                  <Text style={styles.errorModalButtonText}>Continue</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.errorModalButton}
+                onPress={dismissErrorModal}
+              >
+                <Text style={styles.errorModalButtonText}>Dismiss</Text>
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1623,5 +1628,29 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorModalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
+  },
+  errorModalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  errorModalCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorModalContinueButton: {
+    flex: 1,
+    backgroundColor: '#E74C3C',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
   },
 });
