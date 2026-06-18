@@ -12,6 +12,8 @@ import {
   Alert,
   ToastAndroid,
   DeviceEventEmitter,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,6 +65,7 @@ export default function AppointmentDetailScreen() {
   const [loadingNotes, setLoadingNotes] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
 
   useEffect(() => {
     loadAppointmentDetails();
@@ -208,6 +211,7 @@ export default function AppointmentDetailScreen() {
 
   const confirmDelete = () => {
     console.log('[AppointmentDetail] Delete button pressed - showing confirmation');
+    setDeleteReason('');
     setShowDeleteModal(true);
   };
 
@@ -226,7 +230,7 @@ export default function AppointmentDetailScreen() {
 
       // Mark appointment as deleted in Heardat API
       const params = {
-        DeleteReason: "",
+        DeleteReason: deleteReason,
         AppointmentID: appointment.AppointmentID,
         Deleted: '1',
       };
@@ -671,7 +675,10 @@ export default function AppointmentDetailScreen() {
         animationType="fade"
         onRequestClose={() => setShowDeleteModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
             <IconSymbol
               ios_icon_name="trash.fill"
@@ -682,9 +689,27 @@ export default function AppointmentDetailScreen() {
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
               Delete Appointment?
             </Text>
-            <Text style={[styles.modalMessage, { color: theme.dark ? '#98989D' : '#666' }]}>
+            <Text style={[styles.modalMessage, { color: theme.dark ? '#98989D' : '#666', marginBottom: 8 }]}>
               Are you sure you want to delete this appointment? This action cannot be undone.
             </Text>
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: theme.colors.text,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
+                }
+              ]}
+              placeholder="Reason for deletion (optional)"
+              placeholderTextColor={theme.dark ? '#8E8E93' : '#AEAEB2'}
+              value={deleteReason}
+              onChangeText={setDeleteReason}
+              multiline
+              numberOfLines={3}
+            />
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton, { borderColor: theme.colors.border }]}
@@ -704,7 +729,7 @@ export default function AppointmentDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Deleting Overlay */}
@@ -869,5 +894,14 @@ const styles = StyleSheet.create({
   deletingText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  input: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 });

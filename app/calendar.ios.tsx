@@ -58,7 +58,7 @@ export default function CalendarScreen() {
   const { user } = useAuth();
   const { selectedAudiologists, allAudiologists, isLoadingAudiologists } = useAppointments();
 
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
   const [appointments, setAppointments] = useState<HeardatAppointment[]>([]);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
