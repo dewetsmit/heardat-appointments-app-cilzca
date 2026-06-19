@@ -2,7 +2,7 @@
   "expo": {
     "name": "Heardat Appointments",
     "slug": "heardat-appointments-app-cilzca",
-    "version": "3.0.8",
+    "version": "3.0.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
