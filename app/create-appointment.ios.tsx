@@ -408,7 +408,7 @@ export default function CreateAppointmentScreen() {
 
       // Call the createNewAppointment function
       const response = await createNewAppointment(appointmentFormData);
-      
+
       // Add a check to intercept API-level errors that might return a 200 OK status
       if (!response ||
         (typeof response === 'object' && (response.error || response.status === 'error' || response.success === false)) ||
@@ -436,10 +436,10 @@ export default function CreateAppointmentScreen() {
           console.error('[CreateAppointment] Non-fatal error creating assistant appointment:', assistErr);
         }
       }
-      
+
       // CREATE APPOINTMENT NOTE
       let finalAppointmentId = isEditMode && editAppointmentId ? editAppointmentId : null;
-      if (response) {
+      if (!finalAppointmentId && response) {
         try {
           const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
 
@@ -1065,7 +1065,7 @@ export default function CreateAppointmentScreen() {
           {showTimePicker && (() => {
             const minTime = new Date(time);
             minTime.setHours(6, 0, 0, 0);
-            
+
             const maxTime = new Date(time);
             maxTime.setHours(18, 0, 0, 0);
 

@@ -492,7 +492,7 @@ export default function CreateAppointmentScreen() {
       // CREATE APPOINTMENT NOTE
 
       let finalAppointmentId = isEditMode && editAppointmentId ? editAppointmentId : null;
-      if (response) {
+      if (!finalAppointmentId && response) {
         try {
           const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
           console.log(parsedResponse);
