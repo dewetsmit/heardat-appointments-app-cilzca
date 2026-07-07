@@ -44,6 +44,8 @@ interface HeardatAppointment {
   Type?: string;
   FirstName?: string;
   LastName?: string;
+  ProcedureID?: string;
+  ProcedureName?: string;
 }
 
 // Helper function to get audiologist color for dots
@@ -52,10 +54,30 @@ const AUDIOLOGIST_COLORS = [
   '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00',
 ];
 
+// Helper to show procedure name instead of type if available, otherwise fallback to type
+const getAppointmentTypeOrProcedure = (apt: any, proceduresList: any[]) => {
+  const procId = apt.ProcedureID || apt.procedureId || (apt.procedure && apt.procedure.id);
+  if (procId && proceduresList && proceduresList.length > 0) {
+    const procedure = proceduresList.find((p: any) =>
+      String(p.ProcedureID) === String(procId) ||
+      String(p.id) === String(procId)
+    );
+    if (procedure) {
+      const name = procedure.Name || procedure.name || procedure.ProcedureName;
+      if (name) return name;
+    }
+  }
+
+  const directProcName = apt.ProcedureName || apt.procedureName || (apt.procedure && apt.procedure.name);
+  if (directProcName) return directProcName;
+
+  return apt.Type || apt.appointmentType || apt.type || '';
+};
+
 export default function CalendarScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, procedures } = useAuth();
   const { selectedAudiologists, allAudiologists, isLoadingAudiologists } = useAppointments();
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
@@ -586,6 +608,9 @@ export default function CalendarScreen() {
 
                                 <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
                                   {apt.FirstName + " " + apt.LastName}
+                                </Text>
+                                <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
+                                  {getAppointmentTypeOrProcedure(apt, procedures)}
                                 </Text>
 
                                 {apt.Notes && (
