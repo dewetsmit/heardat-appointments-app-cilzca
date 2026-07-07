@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import moment from 'moment';
-import { heardatApiCall, getHeardatCredentials, getAppointmentNotes, getUsers } from '@/utils/api';
+import { heardatApiCall, getHeardatCredentials, getAppointmentNotes, getUsers, getBranches } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface AppointmentDetail {
@@ -158,6 +158,30 @@ export default function AppointmentDetailScreen() {
         setAudiologists(usersRes);
       } catch (err) {
         console.error('[AppointmentDetail] Failed to load users in background', err);
+      }
+
+      // Fetch branches for mapping branch name
+      try {
+        const branchesRes = await getBranches();
+        if (Array.isArray(branchesRes)) {
+          setAppointment(prev => {
+            if (!prev) return prev;
+            if (prev.BranchID) {
+              const branch = branchesRes.find(
+                (b: any) => String(b.BranchID || b.id) === String(prev.BranchID)
+              );
+              if (branch) {
+                return {
+                  ...prev,
+                  BranchName: branch.Name || branch.name,
+                };
+              }
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error('[AppointmentDetail] Failed to load branches in background', err);
       }
 
       // Fetch notes
@@ -583,7 +607,7 @@ export default function AppointmentDetailScreen() {
                 Assistant
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                {JSON.stringify(appointment)}
+                {appointment.AssistantName}
               </Text>
             </View>
           )}
