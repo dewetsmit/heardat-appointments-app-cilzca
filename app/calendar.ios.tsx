@@ -46,7 +46,35 @@ interface HeardatAppointment {
   LastName?: string;
   ProcedureID?: string;
   ProcedureName?: string;
+  UserIDAssignedAssistant?: string | string[] | any[];
+  calendarRole?: 'Practitioner' | 'Assistant';
 }
+
+const getAssistantAppointments = (data: any): HeardatAppointment[] => {
+  const assistantList = data?.assistants ?? data?.assistant;
+  return Array.isArray(assistantList) ? assistantList : [];
+};
+
+const getAssignedAssistantIds = (appointment: HeardatAppointment): string[] => {
+  const assignedAssistants: any =
+    appointment.UserIDAssignedAssistant ??
+    (appointment as any).userIDAssignedAssistant ??
+    (appointment as any).AssistantID ??
+    (appointment as any).assistantId;
+
+  const values = Array.isArray(assignedAssistants)
+    ? assignedAssistants
+    : String(assignedAssistants || '').split(',');
+
+  return values
+    .map((value: any) => String(value?.UserID ?? value?.id ?? value).trim())
+    .filter((id: string) => id && id !== '0');
+};
+
+const belongsToAssistant = (appointment: HeardatAppointment, assistantId: string) => {
+  const assignedAssistantIds = getAssignedAssistantIds(appointment);
+  return assignedAssistantIds.length === 0 || assignedAssistantIds.includes(String(assistantId));
+};
 
 // Helper function to get audiologist color for dots
 const AUDIOLOGIST_COLORS = [
@@ -138,11 +166,39 @@ export default function CalendarScreen() {
 
           const data = await getUserAppointments(startDate, endDate, searchUser);
 
-          if (data && data.appointments && Array.isArray(data.appointments)) {
-            console.log('[Calendar] Found', data.appointments.length, 'appointments for', audiologist.full_name);
+          const examinerAppointments: HeardatAppointment[] = Array.isArray(data?.appointments)
+            ? data.appointments
+            : [];
+          const assistantAppointments = getAssistantAppointments(data).filter((apt) =>
+            belongsToAssistant(apt, audiologist.user_id)
+          );
+          const roleAppointments = [
+            ...assistantAppointments.map(apt => ({ ...apt, calendarRole: 'Assistant' as const })),
+            ...examinerAppointments.map(apt => ({
+              ...apt,
+              calendarRole: getAssignedAssistantIds(apt).includes(String(audiologist.user_id))
+                ? 'Assistant' as const
+                : 'Practitioner' as const,
+            })),
+          ];
+          const userAppointments = roleAppointments.filter(
+            (apt, index, list) =>
+              index === list.findIndex((candidate) =>
+                String(candidate.AppointmentID) === String(apt.AppointmentID)
+              )
+          );
 
-            // Add audiologist info to each appointment
-            const appointmentsWithAudiologist = data.appointments.map((apt: HeardatAppointment) => ({
+          if (userAppointments.length > 0) {
+            console.log(
+              '[Calendar] Found',
+              examinerAppointments.length,
+              'examiner and',
+              assistantAppointments.length,
+              'assistant appointments for',
+              audiologist.full_name
+            );
+
+            const appointmentsWithAudiologist = userAppointments.map((apt: HeardatAppointment) => ({
               ...apt,
               audiologistName: audiologist.full_name,
               audiologistId: audiologist.user_id,
@@ -203,7 +259,9 @@ export default function CalendarScreen() {
       params: {
         appointmentId: appointment.AppointmentID,
         passedClientName: clientName,
-        passedAudiologistName: appointment.audiologistName || appointment.UserName || '',
+        // `audiologistName` is the calendar lane owner, which can be an
+        // assistant. Prefer the appointment's actual examiner name.
+        passedAudiologistName: appointment.UserName || '',
       },
     });
   };
@@ -599,11 +657,27 @@ export default function CalendarScreen() {
                                   <Text style={[styles.appointmentTime, { color: theme.colors.primary }]}>
                                     {timeText}
                                   </Text>
-                                  {apt.Duration && (
-                                    <Text style={[styles.appointmentDuration, { color: theme.dark ? '#98989D' : '#666' }]}>
-                                      {apt.Duration}
-                                    </Text>
-                                  )}
+                                  <View style={styles.appointmentHeaderMeta}>
+                                    <View style={[
+                                      styles.roleBadge,
+                                      { backgroundColor: apt.calendarRole === 'Assistant' ? '#AF52DE20' : `${theme.colors.primary}20` },
+                                    ]}>
+                                      <IconSymbol
+                                        ios_icon_name={apt.calendarRole === 'Assistant' ? 'person.2.fill' : 'stethoscope'}
+                                        android_material_icon_name={apt.calendarRole === 'Assistant' ? 'group' : 'medical-services'}
+                                        size={12}
+                                        color={apt.calendarRole === 'Assistant' ? '#AF52DE' : theme.colors.primary}
+                                      />
+                                      <Text style={[styles.roleBadgeText, { color: apt.calendarRole === 'Assistant' ? '#AF52DE' : theme.colors.primary }]}>
+                                        {apt.calendarRole || 'Practitioner'}
+                                      </Text>
+                                    </View>
+                                    {apt.Duration && (
+                                      <Text style={[styles.appointmentDuration, { color: theme.dark ? '#98989D' : '#666' }]}>
+                                        {apt.Duration}
+                                      </Text>
+                                    )}
+                                  </View>
                                 </View>
 
                                 <Text style={[styles.appointmentClient, { color: theme.colors.text }]}>
@@ -790,6 +864,23 @@ const styles = StyleSheet.create({
   },
   appointmentDuration: {
     fontSize: 12,
+  },
+  appointmentHeaderMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   appointmentClient: {
     fontSize: 16,

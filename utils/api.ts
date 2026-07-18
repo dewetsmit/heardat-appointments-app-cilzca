@@ -459,10 +459,19 @@ export const getAppointmentsForUser = async (
 
     console.log('[API] Appointments fetched successfully, raw data:', parsedData);
 
-    // Return in a consistent format with appointments array
+    // Return in a consistent format without dropping the assistant list. Some
+    // Heardat responses contain only assistant appointments for the requested
+    // user, so checking only `appointments` would incorrectly return an empty
+    // result.
     if (parsedData && parsedData.appointments && Array.isArray(parsedData.appointments)) {
       console.log('[API] Found', parsedData.appointments.length, 'appointments in response');
       return parsedData;
+    } else if (
+      parsedData &&
+      (Array.isArray(parsedData.assistants) || Array.isArray(parsedData.assistant))
+    ) {
+      console.log('[API] Found assistant appointments in response');
+      return { appointments: [], ...parsedData };
     } else if (Array.isArray(parsedData)) {
       // If the response is directly an array, wrap it
       console.log('[API] Response is array, wrapping in appointments object');

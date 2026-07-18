@@ -43,11 +43,27 @@ interface AppointmentDetail {
   ProcedureName?: string;
   ProcedureID?: string;
   UserIDAssigned?: string;
-  UserIDAssignedAssistant?: string;
+  UserIDAssignedAssistant?: string | string[] | any[];
   AssistantName?: string;
+  AssistantNames?: string[];
   AssignedAssistant_FirstName?: string;
   AssignedAssistant_LastName?: string;
+  assistantId?: string;
 }
+
+const getUserDisplayName = (user: any): string =>
+  user?.Name ||
+  user?.FullName ||
+  user?.full_name ||
+  `${user?.FirstName || ''} ${user?.LastName || ''}`.trim();
+
+const getAssistantIds = (appointment: AppointmentDetail): string[] => {
+  const value: any = appointment.UserIDAssignedAssistant ?? appointment.assistantId;
+  const values = Array.isArray(value) ? value : String(value || '').split(',');
+  return [...new Set(values
+    .map((item: any) => String(item?.UserID ?? item?.id ?? item).trim())
+    .filter((id: string) => id && id !== '0'))];
+};
 
 export default function AppointmentDetailScreen() {
   const { appointmentId, passedClientName, passedAudiologistName } = useLocalSearchParams<{
@@ -105,6 +121,30 @@ export default function AppointmentDetailScreen() {
       if (Array.isArray(appointments) && appointments.length > 0) {
         const appointmentData = { ...appointments[0] };
 
+        // Assistant assignments are returned as a separate list by some API
+        // responses. Keep every assignment associated with this appointment.
+        const assistantList = parsedData?.assistants ?? parsedData?.assistant;
+        if (Array.isArray(assistantList)) {
+          const matchingAssistants = assistantList.filter((assistant: any) =>
+            !assistant.AppointmentID ||
+            String(assistant.AppointmentID) === String(appointmentData.AppointmentID)
+          );
+          const assistantIds = matchingAssistants
+            .map((assistant: any) =>
+              assistant.UserIDAssignedAssistant ?? assistant.UserID ?? assistant.id
+            )
+            .filter(Boolean);
+          const assistantNames = matchingAssistants.map(getUserDisplayName).filter(Boolean);
+
+          if (assistantIds.length > 0) {
+            appointmentData.UserIDAssignedAssistant = assistantIds;
+          }
+          if (assistantNames.length > 0) {
+            appointmentData.AssistantNames = [...new Set(assistantNames)];
+            appointmentData.AssistantName = appointmentData.AssistantNames[0];
+          }
+        }
+
         // Merge passedClientName from calendar view if API payload does not have name fields
         const hasApiName = appointmentData.ClientName || appointmentData.FirstName || appointmentData.LastName;
         if (!hasApiName && passedClientName) {
@@ -121,6 +161,7 @@ export default function AppointmentDetailScreen() {
         const assistantLastName = appointmentData.AssignedAssistant_LastName;
         if (assistantFirstName || assistantLastName) {
           appointmentData.AssistantName = `${assistantFirstName || ''} ${assistantLastName || ''}`.trim();
+          appointmentData.AssistantNames = [appointmentData.AssistantName];
         }
 
         // Map ProcedureName from context procedures
@@ -156,6 +197,36 @@ export default function AppointmentDetailScreen() {
       try {
         const usersRes = await getUsers();
         setAudiologists(usersRes);
+
+        if (Array.isArray(usersRes)) {
+          setAppointment(prev => {
+            if (!prev) return prev;
+
+            const examiner = usersRes.find((candidate: any) =>
+              String(candidate.UserID ?? candidate.id) === String(prev.UserIDAssigned)
+            );
+            const examinerName = getUserDisplayName(examiner);
+
+            const resolvedAssistantNames = getAssistantIds(prev)
+              .map(id => usersRes.find((candidate: any) =>
+                String(candidate.UserID ?? candidate.id) === id
+              ))
+              .map(getUserDisplayName)
+              .filter(Boolean);
+            const assistantNames = [...new Set([
+              ...(prev.AssistantNames || []),
+              ...(prev.AssistantName ? [prev.AssistantName] : []),
+              ...resolvedAssistantNames,
+            ])];
+
+            return {
+              ...prev,
+              UserName: examinerName || prev.UserName,
+              AssistantName: assistantNames[0],
+              AssistantNames: assistantNames,
+            };
+          });
+        }
       } catch (err) {
         console.error('[AppointmentDetail] Failed to load users in background', err);
       }
@@ -595,7 +666,7 @@ export default function AppointmentDetailScreen() {
             </Text>
           </View>
 
-          {appointment.AssistantName && (
+          {(appointment.AssistantNames?.length || appointment.AssistantName) && (
             <View style={styles.infoRow}>
               <IconSymbol
                 ios_icon_name="person.2.fill"
@@ -607,7 +678,10 @@ export default function AppointmentDetailScreen() {
                 Assistant
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                {appointment.AssistantName}
+                {(appointment.AssistantNames?.length
+                  ? appointment.AssistantNames
+                  : [appointment.AssistantName]
+                ).filter(Boolean).join(', ')}
               </Text>
             </View>
           )}
