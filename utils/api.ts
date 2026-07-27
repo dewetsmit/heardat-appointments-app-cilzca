@@ -263,6 +263,37 @@ export const createNewAppointment = async (
   }
 };
 
+export const extractAppointmentId = (response: any): string | null => {
+  let parsedResponse = response;
+  if (typeof response === 'string') {
+    try {
+      parsedResponse = JSON.parse(response);
+    } catch {
+      const match = response.match(/["']?AppointmentID["']?\s*:\s*["']?([^"',}\s]+)/i);
+      return match?.[1] || null;
+    }
+  }
+
+  const visited = new Set<any>();
+  const findId = (value: any): string | null => {
+    if (!value || typeof value !== 'object' || visited.has(value)) return null;
+    visited.add(value);
+
+    for (const [key, child] of Object.entries(value)) {
+      if (key.replace(/[_-]/g, '').toLowerCase() === 'appointmentid' && child != null && child !== '') {
+        return String(child);
+      }
+    }
+    for (const child of Object.values(value)) {
+      const found = findId(child);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  return findId(parsedResponse);
+};
+
 /**
  * Get appointment notes from Heardat API
  * Based on the Angular getAppointmentNotes method
@@ -331,6 +362,18 @@ export const createAppointmentNote = async (
 
     // Call Heardat API with POST method and params as query string
     const data = await heardatApiCall('Notes', params, 'POST');
+
+    if (
+      !data ||
+      (typeof data === 'object' && (data.error || data.Error || data.status === 'error' || data.success === false)) ||
+      (typeof data === 'string' && data.toLowerCase().includes('error'))
+    ) {
+      throw new Error(
+        typeof data === 'object'
+          ? String(data.message || data.error || data.Error || 'The API failed to save the appointment note.')
+          : String(data || 'The API failed to save the appointment note.')
+      );
+    }
 
     console.log('[API] Appointment note created successfully');
     return data;
@@ -468,7 +511,12 @@ export const getAppointmentsForUser = async (
       return parsedData;
     } else if (
       parsedData &&
-      (Array.isArray(parsedData.assistants) || Array.isArray(parsedData.assistant))
+      (
+        Array.isArray(parsedData.assistants) ||
+        Array.isArray(parsedData.assistant) ||
+        Array.isArray(parsedData.assistantAppointments) ||
+        Array.isArray(parsedData.appointmentsAsAssistant)
+      )
     ) {
       console.log('[API] Found assistant appointments in response');
       return { appointments: [], ...parsedData };

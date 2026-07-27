@@ -51,9 +51,30 @@ interface HeardatAppointment {
 }
 
 const getAssistantAppointments = (data: any): HeardatAppointment[] => {
-  const assistantList = data?.assistants ?? data?.assistant;
+  const assistantList =
+    data?.assistants ??
+    data?.assistant ??
+    data?.assistantAppointments ??
+    data?.appointmentsAsAssistant;
   return Array.isArray(assistantList) ? assistantList : [];
 };
+
+const getAppointmentIdentity = (appointment: HeardatAppointment): string =>
+  [
+    appointment.AppointmentID || '',
+    appointment.DateAppointment || '',
+    appointment.UserIDAssigned || '',
+    getAssignedAssistantIds(appointment).join(','),
+  ].join('|');
+
+const getAppointmentSlotIdentity = (appointment: HeardatAppointment): string =>
+  [
+    appointment.DateAppointment || '',
+    appointment.Duration || '',
+    (appointment as any).PatientID || appointment.ClientName || `${appointment.FirstName || ''} ${appointment.LastName || ''}`,
+    appointment.ProcedureID || '',
+    appointment.Type || '',
+  ].join('|');
 
 const getAssignedAssistantIds = (appointment: HeardatAppointment): string[] => {
   const assignedAssistants: any =
@@ -64,7 +85,9 @@ const getAssignedAssistantIds = (appointment: HeardatAppointment): string[] => {
 
   const values = Array.isArray(assignedAssistants)
     ? assignedAssistants
-    : String(assignedAssistants || '').split(',');
+    : assignedAssistants && typeof assignedAssistants === 'object'
+      ? [assignedAssistants]
+      : String(assignedAssistants || '').split(',');
 
   return values
     .map((value: any) => String(value?.UserID ?? value?.id ?? value).trim())
@@ -184,7 +207,7 @@ export default function CalendarScreen() {
           const userAppointments = roleAppointments.filter(
             (apt, index, list) =>
               index === list.findIndex((candidate) =>
-                String(candidate.AppointmentID) === String(apt.AppointmentID)
+                getAppointmentIdentity(candidate) === getAppointmentIdentity(apt)
               )
           );
 
@@ -213,15 +236,46 @@ export default function CalendarScreen() {
         }
       }
 
-      console.log('[Calendar] Total appointments loaded:', allAppointments.length);
-      setAppointments(allAppointments);
+      const appointmentsWithAssistantLanes = [...allAppointments];
+      allAppointments
+        .filter(appointment => appointment.calendarRole !== 'Assistant')
+        .forEach((appointment) => {
+          getAssignedAssistantIds(appointment).forEach((assistantId) => {
+            const assistant = allAudiologists.find(person =>
+              String(person.user_id) === assistantId || String(person.id) === assistantId
+            );
+            const assistantIsVisible = selectedAudiologists.some(person =>
+              String(person.user_id) === assistantId || String(person.id) === assistantId
+            );
+            if (!assistant || !assistantIsVisible) return;
+
+            const alreadyInAssistantLane = appointmentsWithAssistantLanes.some(candidate =>
+              String(candidate.audiologistId) === assistantId &&
+              (
+                getAppointmentIdentity(candidate) === getAppointmentIdentity(appointment) ||
+                getAppointmentSlotIdentity(candidate) === getAppointmentSlotIdentity(appointment)
+              )
+            );
+            if (!alreadyInAssistantLane) {
+              appointmentsWithAssistantLanes.push({
+                ...appointment,
+                audiologistId: assistant.user_id,
+                audiologistName: assistant.full_name,
+                calendarRole: 'Assistant',
+              });
+            }
+          });
+        });
+
+      console.log('[Calendar] Total appointments loaded:', appointmentsWithAssistantLanes.length);
+      setAppointments(appointmentsWithAssistantLanes);
     } catch (error) {
       console.error('[Calendar] Failed to load appointments:', error);
       setAppointments([]);
     } finally {
       setIsLoadingAppointments(false);
     }
-  }, [selectedDate, user, selectedAudiologists, viewMode]);
+  }, [selectedDate, user, selectedAudiologists, allAudiologists, viewMode]);
 
   useEffect(() => {
     // Only load appointments if audiologists are loaded and selected

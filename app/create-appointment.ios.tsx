@@ -29,6 +29,7 @@ import {
   getHeardatCredentials,
   createNewAppointment,
   createAppointmentNote,
+  extractAppointmentId,
   formatDateForAPI,
   formatTimeForAPI,
   getUsers,
@@ -55,6 +56,26 @@ interface HeardatAppointment {
   Duration: string;
   UserIDAssigned?: string;
 }
+
+const getCalendarAppointments = (response: any): HeardatAppointment[] => {
+  const data = typeof response === 'string' ? JSON.parse(response) : response;
+  if (Array.isArray(data)) return data;
+
+  const lists = [
+    data?.appointments,
+    data?.assistants,
+    data?.assistant,
+    data?.assistantAppointments,
+    data?.appointmentsAsAssistant,
+  ].filter(Array.isArray) as HeardatAppointment[][];
+
+  return lists.flat().filter((appointment, index, appointments) =>
+    index === appointments.findIndex((candidate) =>
+      String(candidate.AppointmentID) === String(appointment.AppointmentID) &&
+      candidate.DateAppointment === appointment.DateAppointment
+    )
+  );
+};
 
 export default function CreateAppointmentScreen() {
   const router = useRouter();
@@ -90,6 +111,7 @@ export default function CreateAppointmentScreen() {
   const [selectedAppointmentType, setSelectedAppointmentType] = useState<DropdownOption | null>({ id: 'Appointment', label: 'Appointment' });
   const selectedTypeId = selectedAppointmentType?.id || 'Appointment';
   const isPatientInfoRequired = selectedTypeId === 'Appointment' || selectedTypeId === 'Theater';
+  const canAssignAssistant = selectedTypeId !== 'Leave';
   const showUntilDate = ['Leave', 'Sick leave', 'Training', 'Unavailable', 'Personal', 'Travel time'].includes(selectedTypeId);
   const [untilDate, setUntilDate] = useState(new Date());
   const [showUntilDatePicker, setShowUntilDatePicker] = useState(false);
@@ -393,7 +415,7 @@ export default function CreateAppointmentScreen() {
         ProcedureID: selectedProcedure ? selectedProcedure.id : "0",
         ConsoltationID: "0",
         Type: selectedAppointmentType?.id || "Appointment",
-        UserIDAssignedAssistant: selectedAssistant ? selectedAssistant.id : "0",
+        UserIDAssignedAssistant: canAssignAssistant && selectedAssistant ? selectedAssistant.id : "0",
         RemindMe: sendReminders ? "1" : "0",
         DateEndAppointment: showUntilDate ? formatLocalDate(untilDate, endTime) : formatLocalDate(date, endTime),
         UserID: credentials.userId,
@@ -423,7 +445,7 @@ export default function CreateAppointmentScreen() {
       console.log('[CreateAppointment] Appointment created successfully:', response);
 
       // Create appointment on the assistant's calendar
-      if (selectedAssistant) {
+      if (canAssignAssistant && selectedAssistant) {
         const assistantFormData = {
           ...appointmentFormData,
           UserID: selectedAssistant.id,
@@ -438,48 +460,31 @@ export default function CreateAppointmentScreen() {
       }
 
       // CREATE APPOINTMENT NOTE
-      let finalAppointmentId = isEditMode && editAppointmentId ? editAppointmentId : null;
-      if (!finalAppointmentId && response) {
-        try {
-          const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
+      const finalAppointmentId =
+        isEditMode && editAppointmentId
+          ? editAppointmentId
+          : extractAppointmentId(response);
 
-          if (parsedResponse.AppointmentID) {
-            finalAppointmentId = parsedResponse.AppointmentID.toString();
-          } else if (parsedResponse.appointments && parsedResponse.appointments[0]) {
-            finalAppointmentId = parsedResponse.appointments[0].AppointmentID.toString();
-          } else if (parsedResponse.appointmentsRecord && parsedResponse.appointmentsRecord.AppointmentID) {
-            finalAppointmentId = parsedResponse.appointmentsRecord.AppointmentID.toString();
-          } else {
-            const match = String(response).match(/"AppointmentID"\s*:\s*"?(\d+)"?/);
-            if (match && match[1]) {
-              finalAppointmentId = match[1];
-            }
-          }
-        } catch (e) {
-          console.warn('[CreateAppointment] Could not parse AppointmentID from response', e);
-          const match = String(response).match(/"AppointmentID"\s*:\s*"?(\d+)"?/);
-          if (match && match[1]) {
-            finalAppointmentId = match[1];
-          }
+      if (notes.trim() !== '') {
+        if (!finalAppointmentId) {
+          throw new Error('The appointment was saved, but its ID was not returned, so the note could not be attached.');
         }
-      }
-
-      if (finalAppointmentId && notes.trim() !== '') {
+        console.log('[CreateAppointment] Saving note for appointment:', finalAppointmentId);
         try {
-          console.log('[CreateAppointment] Saving note for appointment:', finalAppointmentId);
           await createAppointmentNote({
-            NotesID: notesId,
-            Note: notes,
+            NotesID: notesId || "0",
+            Note: notes.trim(),
             Table: "Appointments",
             Type: "Appointments",
             PrimaryID: finalAppointmentId,
             Deleted: "0",
             Branch: selectedBranch!.id,
-            CompanyID: credentials.companyId,
-            PatientID: selectedClient?.id
+            CompanyID: credentials.companyId || "0",
+            PatientID: selectedClient?.id || "0"
           });
         } catch (noteError) {
-          console.error('[CreateAppointment] Failed to save appointment note:', noteError);
+          const reason = noteError instanceof Error ? noteError.message : 'Unknown error';
+          throw new Error(`The appointment was saved, but its note could not be saved: ${reason}`);
         }
       }
 
@@ -511,7 +516,7 @@ export default function CreateAppointmentScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [date, time, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, sendReminders, selectedClient, router, isEditMode, editAppointmentId, notes, notesId, showUntilDate, untilDate, selectedAppointmentType]);
+  }, [date, time, selectedBranch, selectedExaminer, duration, selectedProcedure, selectedAssistant, canAssignAssistant, sendReminders, selectedClient, router, isEditMode, editAppointmentId, notes, notesId, showUntilDate, untilDate, selectedAppointmentType]);
 
   const doubleBookingAlert = useCallback(() => {
     Alert.alert(
@@ -554,47 +559,31 @@ export default function CreateAppointmentScreen() {
 
       const credentials = await getHeardatCredentials();
 
-      // Fetch appointments for the selected examiner for the month
-      const searchUser = {
-        UserID: selectedExaminer.id,
-        CompanyID: credentials.companyId || "0",
-        BranchID: selectedBranch.id,
-      };
-
-      console.log('[CreateAppointment] Fetching appointments for double booking check:', searchUser);
-
       let selectedDayAppointments: HeardatAppointment[] = [];
 
       try {
-        const response = await getUserAppointments(
-          formatDateForAPI(firstDayOfMonth),
-          formatDateForAPI(lastDayOfMonth),
-          searchUser
-        );
+        const usersToCheck = [selectedExaminer, canAssignAssistant ? selectedAssistant : null]
+          .filter((person): person is DropdownOption => Boolean(person))
+          .filter((person, index, people) =>
+            index === people.findIndex(candidate => candidate.id === person.id)
+          );
+        const responses = await Promise.all(usersToCheck.map(person =>
+          getUserAppointments(
+            formatDateForAPI(firstDayOfMonth),
+            formatDateForAPI(lastDayOfMonth),
+            {
+              UserID: person.id,
+              CompanyID: credentials.companyId || "0",
+              BranchID: selectedBranch.id,
+            }
+          )
+        ));
 
-        console.log('[CreateAppointment] Appointments response:', response);
+        selectedDayAppointments = responses
+          .flatMap(getCalendarAppointments)
+          .filter((appointment) => new Date(appointment.DateAppointment).getDate() === selectedDay);
 
-        if (response) {
-          // Parse response - it might be a string or already parsed
-          let calendarData: HeardatAppointment[] = [];
-
-          if (typeof response === 'string') {
-            const parsed = JSON.parse(response);
-            calendarData = parsed.appointments || parsed;
-          } else if (response.appointments) {
-            calendarData = response.appointments;
-          } else if (Array.isArray(response)) {
-            calendarData = response;
-          }
-
-          // Filter appointments for the selected day
-          selectedDayAppointments = calendarData.filter((appointment: HeardatAppointment) => {
-            const appointmentDay = new Date(appointment.DateAppointment).getDate();
-            return appointmentDay === selectedDay;
-          });
-
-          console.log('[CreateAppointment] Appointments on selected day:', selectedDayAppointments.length);
-        }
+        console.log('[CreateAppointment] Appointments on selected day for assigned staff:', selectedDayAppointments.length);
       } catch (error) {
         console.error('[CreateAppointment] Error fetching appointments for double booking check:', error);
         Alert.alert('Error', 'Could not check for double bookings. Please try again.');
@@ -671,7 +660,7 @@ export default function CreateAppointmentScreen() {
       console.error('[CreateAppointment] Error in double booking check:', error);
       Alert.alert('Error', 'Failed to check for double bookings. Please try again.');
     }
-  }, [date, time, duration, selectedClient, selectedBranch, selectedProcedure, selectedExaminer, createAppointment, doubleBookingAlert]);
+  }, [date, time, duration, selectedClient, selectedBranch, selectedProcedure, selectedExaminer, selectedAssistant, canAssignAssistant, createAppointment, doubleBookingAlert]);
 
   const handleSubmit = async () => {
     if (isEditMode) {
@@ -976,6 +965,9 @@ export default function CreateAppointmentScreen() {
             appointmentTypeOptions,
             (option) => {
               setSelectedAppointmentType(option);
+              if (option.id === 'Leave') {
+                setSelectedAssistant(null);
+              }
             },
             'appointmentType'
           )}
@@ -1129,7 +1121,7 @@ export default function CreateAppointmentScreen() {
           )}
 
           {/* Assistant Dropdown */}
-          {isPatientInfoRequired && renderDropdown(
+          {canAssignAssistant && renderDropdown(
             'Assistant (Optional)',
             selectedAssistant,
             assistantOptions,
