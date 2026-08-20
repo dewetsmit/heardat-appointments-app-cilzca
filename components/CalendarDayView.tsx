@@ -44,6 +44,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_COLUMN_WIDTH = 70;
 const START_HOUR = 6; // 6am
 const END_HOUR = 19; // 7pm (19:00)
+const PIXELS_PER_MINUTE = 2;
 
 // Available slot intervals in minutes
 const SLOT_INTERVALS = [15, 30, 60, 120];
@@ -113,16 +114,8 @@ export function CalendarDayView({
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
-  // Calculate slot height based on interval to ensure each slot is always big enough for all lines of info
-  const slotHeight = (() => {
-    switch (slotInterval) {
-      case 15: return 90;   // 6.0 px/min (15 min slot is 90px tall)
-      case 30: return 150;  // 5.0 px/min (30 min slot is 150px tall)
-      case 60: return 240;  // 4.0 px/min (60 min slot is 240px tall)
-      case 120: return 360; // 3.0 px/min (120 min slot is 360px tall)
-      default: return slotInterval * 4;
-    }
-  })();
+  // Keep every interval on the same compact time scale (120px per hour).
+  const slotHeight = slotInterval * PIXELS_PER_MINUTE;
 
   // Separate full-day events from regular appointments
   const fullDayEvents = appointments.filter(apt => isFullDayEvent(apt.Duration));
@@ -451,7 +444,7 @@ export function CalendarDayView({
                             styles.appointmentBlock,
                             {
                               top: position.top,
-                              height: Math.max(position.height, 75),
+                              height: Math.max(position.height, 52),
                               backgroundColor: color,
                             },
                           ]}

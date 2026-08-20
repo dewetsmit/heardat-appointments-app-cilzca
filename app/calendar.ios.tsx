@@ -390,6 +390,10 @@ export default function CalendarScreen() {
     console.log('[Calendar] Navigated to next:', newDate.format('YYYY-MM-DD'));
   };
 
+  const navigateToday = () => {
+    setSelectedDate(moment().format('YYYY-MM-DD'));
+  };
+
   // Build marked dates for month view with colored dots - FIXED with useMemo
   const markedDates = useMemo(() => {
     const marks: any = {};
@@ -782,6 +786,7 @@ export default function CalendarScreen() {
               onDayPress={handleDayPressFromWeek}
               onSwipeLeft={navigateNext}
               onSwipeRight={navigatePrevious}
+              onTodayPress={navigateToday}
               refreshControl={
                 <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
               }

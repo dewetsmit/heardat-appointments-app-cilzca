@@ -106,9 +106,19 @@ export default function NewClientScreen() {
       ]);
 
       setBranches((Array.isArray(branchesData) ? branchesData : []).map((b: any) => ({ id: b.BranchID, label: b.Name })));
-      setGenders((Array.isArray(gendersData) ? gendersData : []).map((g: any) => ({ id: g.GenderID || g.Name || g.id, label: g.Name || g.label })));
+      setGenders((Array.isArray(gendersData) ? gendersData : [])
+        .map((g: any) => ({
+          id: g.GenderID ?? g.GenderId ?? g.genderId ?? g.genderid ?? g.id,
+          label: g.Name ?? g.name ?? g.label,
+        }))
+        .filter((option: DropdownOption) => option.id != null));
       setLanguages((Array.isArray(languagesData) ? languagesData : []).map((l: any) => ({ id: l.LanguageID || l.Name || l.id, label: l.Name || l.label })));
-      setMedicalAids((Array.isArray(medicalAidsData) ? medicalAidsData : []).map((m: any) => ({ id: m.MedicalAidID || m.Name || m.id, label: m.Name || m.label })));
+      setMedicalAids((Array.isArray(medicalAidsData) ? medicalAidsData : [])
+        .map((m: any) => ({
+          id: m.MedicalAidID ?? m.MedicalAidId ?? m.medicalAidId ?? m.medicalaidid ?? m.id,
+          label: m.Name ?? m.name ?? m.label,
+        }))
+        .filter((option: DropdownOption) => option.id != null));
 
       console.log('[NewClient] Initial dynamic data loaded');
     } catch (error) {
@@ -121,6 +131,7 @@ export default function NewClientScreen() {
 
   // Fetch titles when gender and language change
   useEffect(() => {
+    setSelectedTitle(null);
     if (selectedGender && selectedLanguage) {
       getTitles(selectedGender.id, selectedLanguage.id)
         .then(data => {
@@ -133,6 +144,7 @@ export default function NewClientScreen() {
   }, [selectedGender, selectedLanguage]);
 
   useEffect(() => {
+    setMmSelectedTitle(null);
     if (mmSelectedGender && mmSelectedLanguage) {
       getTitles(mmSelectedGender.id, mmSelectedLanguage.id)
         .then(data => {
@@ -197,12 +209,18 @@ export default function NewClientScreen() {
     lastName.trim() &&
     idNumber.trim() &&
     cellphoneNumber.trim() &&
+    selectedGender &&
+    selectedLanguage &&
+    selectedTitle &&
     selectedBranch &&
     selectedMainMember &&
     (!isNotMainMember || (
       mmFirstName.trim() &&
       mmLastName.trim() &&
-      mmIdNumber.trim()
+      mmIdNumber.trim() &&
+      mmSelectedGender &&
+      mmSelectedLanguage &&
+      mmSelectedTitle
     ))
   );
 
@@ -226,6 +244,18 @@ export default function NewClientScreen() {
       setErrorMessage('Cellphone Number is required');
       return;
     }
+    if (!selectedGender) {
+      setErrorMessage('Gender is required before selecting a title');
+      return;
+    }
+    if (!selectedLanguage) {
+      setErrorMessage('Language is required before selecting a title');
+      return;
+    }
+    if (!selectedTitle) {
+      setErrorMessage('Title is required');
+      return;
+    }
     if (!selectedBranch) {
       setErrorMessage('Branch is required');
       return;
@@ -247,6 +277,18 @@ export default function NewClientScreen() {
       }
       if (!mmIdNumber.trim()) {
         setErrorMessage('Main Member ID Number is required');
+        return;
+      }
+      if (!mmSelectedGender) {
+        setErrorMessage('Main Member Gender is required before selecting a title');
+        return;
+      }
+      if (!mmSelectedLanguage) {
+        setErrorMessage('Main Member Language is required before selecting a title');
+        return;
+      }
+      if (!mmSelectedTitle) {
+        setErrorMessage('Main Member Title is required');
         return;
       }
     }
@@ -361,10 +403,12 @@ export default function NewClientScreen() {
     value: DropdownOption | null,
     options: DropdownOption[],
     onSelect: (option: DropdownOption) => void,
-    dropdownKey: string
+    dropdownKey: string,
+    disabled: boolean = false,
+    disabledPlaceholder: string = 'Select required fields first'
   ) => {
     const isOpen = activeDropdown === dropdownKey;
-    const displayValue = value ? value.label : 'Select...';
+    const displayValue = value ? value.label : disabled ? disabledPlaceholder : 'Select...';
 
     return (
       <View style={styles.fieldContainer}>
@@ -373,8 +417,10 @@ export default function NewClientScreen() {
           style={[
             styles.dropdown,
             { backgroundColor: theme.dark ? '#2C2C2E' : '#F2F2F7', borderColor: theme.colors.border },
+            disabled && { opacity: 0.5 },
           ]}
           onPress={() => setActiveDropdown(isOpen ? null : dropdownKey)}
+          disabled={disabled}
         >
           <Text style={[styles.dropdownText, { color: value ? theme.colors.text : '#999' }]}>
             {displayValue}
@@ -518,9 +564,9 @@ export default function NewClientScreen() {
           {renderDatePicker('Date of Birth', dateOfBirth, showDatePicker, () => setShowDatePicker(true), handleDateChange)}
           {renderTextInput('Cellphone Number *', cellphoneNumber, setCellphoneNumber, 'Enter cellphone number', 'phone-pad')}
           {renderTextInput('Email', email, setEmail, 'Enter email address', 'email-address')}
-          {renderDropdown('Gender', selectedGender, genders, setSelectedGender, 'gender')}
-          {renderDropdown('Language', selectedLanguage, languages, setSelectedLanguage, 'language')}
-          {renderDropdown('Title', selectedTitle, titles, setSelectedTitle, 'title')}
+          {renderDropdown('Gender *', selectedGender, genders, setSelectedGender, 'gender')}
+          {renderDropdown('Language *', selectedLanguage, languages, setSelectedLanguage, 'language')}
+          {renderDropdown('Title *', selectedTitle, titles, setSelectedTitle, 'title', !selectedGender || !selectedLanguage, 'Select Gender and Language first')}
           {renderDropdown('Branch *', selectedBranch, branches, setSelectedBranch, 'branch')}
           {renderDropdown('Medical Aid', medicalAid, medicalAids, setMedicalAid, 'medicalAid')}
           {renderDropdown('Medical Aid Plan', medicalAidPlan, medicalAidPlans, setMedicalAidPlan, 'medicalAidPlan')}
@@ -539,9 +585,9 @@ export default function NewClientScreen() {
             {renderDatePicker('Date of Birth', mmDateOfBirth, showMmDatePicker, () => setShowMmDatePicker(true), handleMmDateChange)}
             {renderTextInput('Cellphone Number', mmCellphoneNumber, setMmCellphoneNumber, 'Enter cellphone number', 'phone-pad')}
             {renderTextInput('Email', mmEmail, setMmEmail, 'Enter email address', 'email-address')}
-            {renderDropdown('Gender', mmSelectedGender, genders, setMmSelectedGender, 'mmGender')}
-            {renderDropdown('Language', mmSelectedLanguage, languages, setMmSelectedLanguage, 'mmLanguage')}
-            {renderDropdown('Title', mmSelectedTitle, mmTitles, setMmSelectedTitle, 'mmTitle')}
+            {renderDropdown('Gender *', mmSelectedGender, genders, setMmSelectedGender, 'mmGender')}
+            {renderDropdown('Language *', mmSelectedLanguage, languages, setMmSelectedLanguage, 'mmLanguage')}
+            {renderDropdown('Title *', mmSelectedTitle, mmTitles, setMmSelectedTitle, 'mmTitle', !mmSelectedGender || !mmSelectedLanguage, 'Select Gender and Language first')}
             {renderDropdown('Branch', mmSelectedBranch, branches, setMmSelectedBranch, 'mmBranch')}
             {renderDropdown('Medical Aid', mmMedicalAid, medicalAids, setMmMedicalAid, 'mmMedicalAid')}
             {renderDropdown('Medical Aid Plan', mmMedicalAidPlan, mmMedicalAidPlans, setMmMedicalAidPlan, 'mmMedicalAidPlan')}

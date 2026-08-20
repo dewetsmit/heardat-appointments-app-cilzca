@@ -125,6 +125,7 @@ export default function CreateAppointmentScreen() {
 
   // Client search state
   const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [procedureSearchQuery, setProcedureSearchQuery] = useState('');
   const [isLoadingClients, setIsLoadingClients] = useState(false);
 
   // Data from API
@@ -793,6 +794,20 @@ export default function CreateAppointmentScreen() {
     const isOpen = activeDropdown === dropdownKey;
     const displayValue = value ? value.label : 'Select...';
     const isClientDropdown = dropdownKey === 'client';
+    const isProcedureDropdown = dropdownKey === 'procedure';
+    const isSearchableDropdown = isClientDropdown || isProcedureDropdown;
+    const searchQuery = isClientDropdown ? clientSearchQuery : procedureSearchQuery;
+    const setSearchQuery = isClientDropdown ? setClientSearchQuery : setProcedureSearchQuery;
+    const displayedOptions = isProcedureDropdown && procedureSearchQuery.trim()
+      ? options.filter(option => option.label.toLowerCase().includes(procedureSearchQuery.trim().toLowerCase()))
+      : options;
+
+    const closeDropdown = () => {
+      setActiveDropdown(null);
+      if (isSearchableDropdown) {
+        setSearchQuery('');
+      }
+    };
 
     return (
       <View style={styles.fieldContainer}>
@@ -802,8 +817,8 @@ export default function CreateAppointmentScreen() {
           onPress={() => {
             console.log(`[CreateAppointment] Dropdown ${dropdownKey} pressed`);
             setActiveDropdown(isOpen ? null : dropdownKey);
-            if (dropdownKey === 'client' && !isOpen) {
-              setClientSearchQuery('');
+            if (isSearchableDropdown && !isOpen) {
+              setSearchQuery('');
             }
           }}
         >
@@ -823,24 +838,18 @@ export default function CreateAppointmentScreen() {
           transparent
           animationType="fade"
           onRequestClose={() => {
-            setActiveDropdown(null);
-            if (isClientDropdown) {
-              setClientSearchQuery('');
-            }
+            closeDropdown();
           }}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
             onPress={() => {
-              setActiveDropdown(null);
-              if (isClientDropdown) {
-                setClientSearchQuery('');
-              }
+              closeDropdown();
             }}
           >
             <View style={[styles.dropdownModal, { backgroundColor: colors.card }]}>
-              {isClientDropdown && (
+              {isSearchableDropdown && (
                 <View style={[styles.searchContainer, { borderBottomColor: colors.border }]}>
                   <IconSymbol
                     ios_icon_name="magnifyingglass"
@@ -850,14 +859,14 @@ export default function CreateAppointmentScreen() {
                   />
                   <TextInput
                     style={[styles.searchInput, { color: colors.text }]}
-                    placeholder="Search clients..."
+                    placeholder={isClientDropdown ? 'Search clients...' : 'Search procedures...'}
                     placeholderTextColor={colors.text + '80'}
-                    value={clientSearchQuery}
-                    onChangeText={setClientSearchQuery}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
                     autoFocus
                   />
-                  {clientSearchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setClientSearchQuery('')}>
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
                       <IconSymbol
                         ios_icon_name="xmark.circle.fill"
                         android_material_icon_name="cancel"
@@ -869,7 +878,7 @@ export default function CreateAppointmentScreen() {
                 </View>
               )}
 
-              <ScrollView style={styles.dropdownList}>
+              <ScrollView style={styles.dropdownList} keyboardShouldPersistTaps="handled">
                 {isLoadingClients && isClientDropdown ? (
                   <View style={styles.loadingDropdown}>
                     <ActivityIndicator size="small" color="#4A90E2" />
@@ -877,24 +886,25 @@ export default function CreateAppointmentScreen() {
                       Loading clients...
                     </Text>
                   </View>
-                ) : options.length === 0 ? (
+                ) : displayedOptions.length === 0 ? (
                   <View style={styles.emptyDropdown}>
                     <Text style={[styles.emptyDropdownText, { color: colors.text + '80' }]}>
-                      {isClientDropdown && clientSearchQuery ? 'No clients found' : 'No options available'}
+                      {isClientDropdown && clientSearchQuery
+                        ? 'No clients found'
+                        : isProcedureDropdown && procedureSearchQuery
+                          ? 'No procedures found'
+                          : 'No options available'}
                     </Text>
                   </View>
                 ) : (
-                  options.map((option, index) => (
+                  displayedOptions.map((option, index) => (
                     <React.Fragment key={option.id}>
                       <TouchableOpacity
                         style={styles.dropdownItem}
                         onPress={() => {
                           console.log(`[CreateAppointment] Selected ${dropdownKey}:`, option.label);
                           onSelect(option);
-                          setActiveDropdown(null);
-                          if (isClientDropdown) {
-                            setClientSearchQuery('');
-                          }
+                          closeDropdown();
                         }}
                       >
                         <Text style={[styles.dropdownItemText, { color: colors.text }]}>
@@ -909,7 +919,7 @@ export default function CreateAppointmentScreen() {
                           />
                         )}
                       </TouchableOpacity>
-                      {index < options.length - 1 && (
+                      {index < displayedOptions.length - 1 && (
                         <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
                       )}
                     </React.Fragment>

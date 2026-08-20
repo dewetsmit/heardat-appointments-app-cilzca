@@ -7,17 +7,17 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   Modal,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Audiologist } from '@/types';
 import { IconSymbol } from '@/components/IconSymbol';
 
 interface Appointment {
   AppointmentID: string;
-  FirstName: string;
-  LastName: string;
+  FirstName?: string;
+  LastName?: string;
   UserName: string;
   DateAppointment: string;
   Duration?: string;
@@ -36,12 +36,12 @@ interface CalendarWeekViewProps {
   onDayPress?: (date: string) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
+  onTodayPress?: () => void;
   refreshControl?: React.ReactElement<any>;
 }
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const TIME_COLUMN_WIDTH = 60;
-const SLOT_HEIGHT = 180;
+const TIME_COLUMN_WIDTH = 52;
+const SLOT_HEIGHT = 72;
 const START_HOUR = 6; // 6am
 const END_HOUR = 19; // 7pm (19:00)
 
@@ -85,9 +85,11 @@ export function CalendarWeekView({
   onDayPress,
   onSwipeLeft,
   onSwipeRight,
+  onTodayPress,
   refreshControl
 }: CalendarWeekViewProps) {
   const theme = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
   const [legendModalVisible, setLegendModalVisible] = useState(false);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -113,9 +115,7 @@ export function CalendarWeekView({
   };
 
   const weekDates = getWeekDates();
-  const numAudiologists = Math.max(1, selectedAudiologists.length);
-  const minDayWidth = (100 * numAudiologists) + 4;
-  const dayWidth = Math.max((SCREEN_WIDTH - TIME_COLUMN_WIDTH - 40) / 7, minDayWidth);
+  const dayWidth = Math.max(32, (screenWidth - TIME_COLUMN_WIDTH) / 7);
 
   // Generate time slots (6am to 7pm)
   const generateTimeSlots = () => {
@@ -242,6 +242,13 @@ export function CalendarWeekView({
           {weekDisplay}
         </Text>
         <TouchableOpacity
+          style={[styles.todayButton, { backgroundColor: `${theme.colors.primary}20` }]}
+          onPress={onTodayPress}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.todayButtonText, { color: theme.colors.primary }]}>Today</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.navButton, { backgroundColor: `${theme.colors.primary}20` }]}
           onPress={onSwipeLeft}
           activeOpacity={0.7}
@@ -345,8 +352,7 @@ export function CalendarWeekView({
       </View>
 
       {/* Full-day events row */}
-      {fullDayEvents.length > 0 && (
-        <View style={[styles.fullDayEventsRow, { backgroundColor: theme.colors.card }]}>
+      <View style={[styles.fullDayEventsRow, { backgroundColor: theme.colors.card }]}>
           <View style={{ width: TIME_COLUMN_WIDTH, paddingRight: 8, backgroundColor: theme.colors.card, zIndex: 10 }}>
             <Text style={[styles.fullDayLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
               All Day
@@ -384,7 +390,6 @@ export function CalendarWeekView({
             </Animated.View>
           </View>
         </View>
-      )}
 
       <ScrollView
         ref={scrollViewRef}
@@ -407,16 +412,7 @@ export function CalendarWeekView({
           </View>
 
           {/* Days grid */}
-          <Animated.ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: true }
-            )}
-            scrollEventThrottle={16}
-            style={{ flex: 1 }}
-          >
+          <Animated.View style={{ flex: 1 }}>
             <View style={styles.daysGridContainer}>
               {weekDates.map((date, dayIndex) => {
                 const dateKey = formatDateKey(date);
@@ -450,9 +446,9 @@ export function CalendarWeekView({
                     {selectedAudiologists.map((audiologist, audiologistIndex) => {
                       const audiologistAppointments = appointmentsByDateAndAudiologist[dateKey]?.[audiologist.user_id] || [];
                       const color = getAudiologistColor(audiologist.user_id);
-                      const numAudiologists = selectedAudiologists.length;
-                      const appointmentWidth = (dayWidth - 4) / numAudiologists;
-                      const leftOffset = 2 + (audiologistIndex * appointmentWidth);
+                      const laneOffset = (audiologistIndex % 3) * 3;
+                      const appointmentWidth = dayWidth - 4 - laneOffset;
+                      const leftOffset = 2 + laneOffset;
 
                       return (
                         <React.Fragment key={audiologist.user_id}>
@@ -471,21 +467,19 @@ export function CalendarWeekView({
                                     top: position.top,
                                     left: leftOffset,
                                     width: appointmentWidth - 2,
-                                    height: Math.max(position.height, 50),
+                                    height: Math.max(position.height, 22),
                                     backgroundColor: color,
+                                    zIndex: audiologistIndex + 1,
                                   },
                                 ]}
                                 onPress={() => onAppointmentPress?.(appointment)}
                                 activeOpacity={0.7}
                               >
-                                <Text style={styles.appointmentTime}>
+                                <Text style={styles.appointmentTime} numberOfLines={1}>
                                   {timeText}
                                 </Text>
-                                <Text style={styles.appointmentClient}>
+                                <Text style={styles.appointmentClient} numberOfLines={2}>
                                   {appointment.FirstName} {appointment.LastName}
-                                </Text>
-                                <Text style={styles.appointmentClient}>
-                                  {appointment.Procedures_Name}
                                 </Text>
                               </TouchableOpacity>
                             );
@@ -497,7 +491,7 @@ export function CalendarWeekView({
                 );
               })}
             </View>
-          </Animated.ScrollView>
+          </Animated.View>
         </View>
       </ScrollView>
 
@@ -568,8 +562,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
     flexDirection: 'row',
@@ -584,10 +578,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   weekText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     flex: 1,
     textAlign: 'center',
+  },
+  todayButton: {
+    height: 32,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  todayButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   legendButton: {
     width: 32,
@@ -600,29 +606,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
-    paddingHorizontal: 20,
   },
   dayHeader: {
     alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 1,
+    paddingVertical: 6,
   },
   dayName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
   dayNumberContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   dayNumber: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   appointmentCountBadge: {
@@ -644,8 +647,8 @@ const styles = StyleSheet.create({
   },
   fullDayEventsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    minHeight: 32,
+    paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
@@ -680,7 +683,6 @@ const styles = StyleSheet.create({
   },
   timelineContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
   },
   timeLabelsColumn: {
     paddingTop: 0,
@@ -716,18 +718,19 @@ const styles = StyleSheet.create({
   appointmentBlock: {
     position: 'absolute',
     borderRadius: 4,
-    padding: 4,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
     overflow: 'hidden',
     borderLeftWidth: 3,
     borderLeftColor: 'rgba(255,255,255,0.5)',
   },
   appointmentTime: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   appointmentClient: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: '#FFFFFF',
   },
