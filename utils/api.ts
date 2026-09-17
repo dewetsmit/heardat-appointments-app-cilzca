@@ -12,7 +12,81 @@ export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || "";
 /**
  * Heardat API configuration
  */
-export const HEARDAT_API_URL = "https://www.heardatonline.co.za/api";
+const ACCESS_LOOKUP_API_URL = "https://www.heardatonline.co.za/api";
+export let HEARDAT_API_URL = ACCESS_LOOKUP_API_URL;
+const API_URL_STORAGE_KEY = "HEARDAT_API_URL";
+
+// Handle URL strings, access-link objects, and Heardat's double-encoded JSON.
+export const parseAccessLink = (response: unknown, fallbackUrl?: string): string => {
+  let value = response;
+  for (let depth = 0; depth < 6; depth++) {
+    if (typeof value === "string") {
+      value = value.trim();
+      try {
+        value = JSON.parse(value as string);
+        continue;
+      } catch {
+        break;
+      }
+    }
+    if (Array.isArray(value)) {
+      value = value[0];
+      continue;
+    }
+    if (value && typeof value === "object") {
+      const fields = Object.entries(value);
+      const field = fields.find(([key]) => key.replace(/[_-]/g, "").toLowerCase() === "apivalue") || fields.find(([key]) =>
+        ["url", "apiurl", "heardatapiurl", "accesslink", "link"].includes(key.replace(/[_-]/g, "").toLowerCase())
+      ) || fields.find(([key]) => ["access", "data"].includes(key.toLowerCase()));
+      value = field?.[1];
+      continue;
+    }
+    break;
+  }
+
+  if ((value == null || value === "") && fallbackUrl) {
+    return fallbackUrl;
+  }
+
+  try {
+    if (typeof value !== "string") throw new Error();
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+      throw new Error();
+    }
+    // APIValue can point to the login endpoint rather than the API base.
+    const path = url.pathname.replace(/\/+$/, "").replace(/\/GetVerifiedUser$/i, "");
+    return `${url.origin}${path || "/api"}`;
+  } catch {
+    throw new Error("Invalid API URL returned by access lookup. Please contact your administrator.");
+  }
+};
+
+export const restoreHeardatApiUrl = async (): Promise<void> => {
+  const savedUrl = await storage.getItem(API_URL_STORAGE_KEY);
+  HEARDAT_API_URL = savedUrl ? parseAccessLink(savedUrl) : ACCESS_LOOKUP_API_URL;
+};
+
+export const resetHeardatApiUrl = async (): Promise<void> => {
+  HEARDAT_API_URL = ACCESS_LOOKUP_API_URL;
+  await storage.deleteItem(API_URL_STORAGE_KEY);
+};
+
+export const resolveHeardatApiUrl = async (login: string, password: string): Promise<void> => {
+  const params = new URLSearchParams({ Login: login, Password: password });
+  const response = await fetch(`${ACCESS_LOOKUP_API_URL}/Access/GetAccessLink?${params.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error("Unable to determine your API URL. Please check your credentials and try again.");
+  }
+  const responseText = await response.text();
+  const apiUrl = parseAccessLink(responseText, ACCESS_LOOKUP_API_URL);
+  await storage.setItem(API_URL_STORAGE_KEY, apiUrl);
+  HEARDAT_API_URL = apiUrl;
+};
 
 /**
  * Check if backend is properly configured

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import * as Network from "expo-network";
-import { getUserAppointments, formatDateForAPI, getAppointmentProcedures } from "@/utils/api";
+import { getUserAppointments, formatDateForAPI, getAppointmentProcedures, HEARDAT_API_URL, resolveHeardatApiUrl, restoreHeardatApiUrl, resetHeardatApiUrl } from "@/utils/api";
 
 interface User {
   id: string;
@@ -45,9 +45,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Heardat API configuration
-const HEARDAT_API_URL = "https://www.heardatonline.co.za/api";
 
 // Platform-specific storage
 export const storage = Platform.OS === "web"
@@ -132,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Verify session is still valid by making a test API call
         try {
           const userData = JSON.parse(storedUserData);
+          await restoreHeardatApiUrl();
           const today = new Date();
           const todayStr = formatDateForAPI(today);
           
@@ -185,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await storage.deleteItem("Username");
           await storage.deleteItem("Password");
           await storage.deleteItem("CurrentUser");
+          await resetHeardatApiUrl();
           
           setUser(null);
           setToken(null);
@@ -216,18 +215,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('Attempting sign in with username:', username);
       setLoading(true);
+      await resolveHeardatApiUrl(username, password);
       
       // Get user's IP address
       const ipAddress = await getUserIP();
       
-      // Build query parameters
       const params = new URLSearchParams({
         Login: username,
         Password: password,
         IP: ipAddress,
       });
       
-      // Call Heardat Access API
+      // Authenticate against the resolved API base URL.
       const accessUrl = `${HEARDAT_API_URL}/Access?${params.toString()}`;
       console.log('Calling Heardat Access API...');
       
@@ -249,7 +248,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Parse the response as JSON
       let parsedResponse;
       try {
-        parsedResponse = JSON.parse(JSON.parse(responseText).toString());
+        parsedResponse = JSON.parse(responseText);
+        if (typeof parsedResponse === 'string') {
+          parsedResponse = JSON.parse(parsedResponse);
+        }
         console.log('Parsed response:', parsedResponse.toString());
         
         // Wait a moment for the object to be fully constructed
@@ -343,6 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await storage.deleteItem("Username");
       await storage.deleteItem("Password");
       await storage.deleteItem("CurrentUser");
+      await resetHeardatApiUrl();
       
       setUser(null);
       setToken(null);
@@ -486,6 +489,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await storage.deleteItem("Password");
       await storage.deleteItem("CurrentUser");
       await storage.deleteItem("redirect_path");
+      await resetHeardatApiUrl();
       
       setUser(null);
       setToken(null);

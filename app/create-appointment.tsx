@@ -353,6 +353,26 @@ export default function CreateAppointmentScreen() {
           }
         }
 
+        // Restore the saved assistant independently of the examiner.
+        const assignedAssistant = apt.UserIDAssignedAssistant ?? apt.assistantId;
+        const assistantValues = Array.isArray(assignedAssistant)
+          ? assignedAssistant
+          : typeof assignedAssistant === 'object' && assignedAssistant !== null
+            ? [assignedAssistant]
+            : String(assignedAssistant || '').split(',');
+        const assistantId = assistantValues
+          .map((value: any) => String(value?.UserID ?? value?.id ?? value).trim())
+          .find((id: string) => id && id !== '0');
+        if (assistantId) {
+          const assistant = assistants.find(person => String(person.id) === assistantId);
+          const label = assistant?.full_name || apt.AssistantNames?.[0] || apt.AssistantName ||
+            `${apt.AssignedAssistant_FirstName || ''} ${apt.AssignedAssistant_LastName || ''}`.trim() ||
+            'Unknown Assistant';
+          setSelectedAssistant({ id: assistantId, label });
+        } else {
+          setSelectedAssistant(null);
+        }
+
         // Type
         if (apt.Type && (!selectedAppointmentType || selectedAppointmentType.id !== apt.Type)) {
           setSelectedAppointmentType({ id: apt.Type, label: apt.Type });
@@ -367,7 +387,7 @@ export default function CreateAppointmentScreen() {
         console.error('[CreateAppointment] Error parsing appointment data for edit:', err);
       }
     }
-  }, [params.editMode, params.appointmentData, loading, branches.length, procedures.length, examiners.length]);
+  }, [params.editMode, params.appointmentData, loading, branches.length, procedures.length, examiners.length, assistants.length]);
 
   // Load notes if in edit mode and they weren't in the initial appointment data
   useEffect(() => {
@@ -496,21 +516,6 @@ export default function CreateAppointmentScreen() {
       }
 
       console.log('[CreateAppointment] Appointment created successfully:', response);
-
-      // Create appointment on the assistant's calendar
-      if (canAssignAssistant && selectedAssistant) {
-        const assistantFormData = {
-          ...appointmentFormData,
-          UserID: selectedAssistant.id,
-          UserIDAssigned: selectedAssistant.id
-        };
-        try {
-          console.log('[CreateAppointment] Creating secondary appointment for assistant:', assistantFormData);
-          await createNewAppointment(assistantFormData);
-        } catch (assistErr) {
-          console.error('[CreateAppointment] Non-fatal error creating assistant appointment:', assistErr);
-        }
-      }
 
       // CREATE APPOINTMENT NOTE
 
