@@ -1,3 +1,4 @@
+import { fetchCalendarAppointmentsForUsers, fetchUserCalendarAppointments } from './calendarAppointments';
 
 import Constants from "expo-constants";
 import { Platform, DeviceEventEmitter } from "react-native";
@@ -308,7 +309,7 @@ export const createNewAppointment = async (
     const params: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(appointmentFormData)) {
-      if (value !== "" && value !== null && value !== undefined) {
+      if ((value !== "" || key === "AssistantList") && value !== null && value !== undefined) {
         params[key] = value ? value.toString() : "";
       }
     }
@@ -479,13 +480,11 @@ export const createNewPatient = async (
       throw new Error("Company Key not found. Please sign in again.");
     }
 
-    // Build params object, filtering out empty values
+    // Preserve empty fields and zero values in the patient query parameters.
     const params: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(patientData)) {
-      if (value !== "" && value !== null && value !== undefined) {
-        params[key] = value ? value.toString() : "";
-      }
+      params[key] = value == null ? "" : String(value);
     }
 
     // Add UserID and CompanyID from current user
@@ -515,8 +514,7 @@ export const createNewPatient = async (
  * @returns Promise with appointments data
  */
 
-// examiner = 8params 
-// assistant = 9params (extra param is Type)
+// Calendar lists require detail lookups to retrieve all assistant assignments.
 
 // BranchID	
 // UserIDAssigned	
@@ -526,6 +524,24 @@ export const createNewPatient = async (
 // Userkey	
 // Companykey	
 // Sessionkey
+
+export const getAppointmentsForUsers = async (
+  startDate: string,
+  endDate: string,
+  userIds: string[]
+) => {
+  const credentials = await getHeardatCredentials();
+  return fetchCalendarAppointmentsForUsers(
+    params => heardatApiCall('Appointments', params),
+    {
+      Companykey: credentials.companyKey || '0',
+      Deleted: '0',
+      DateAppointmentStart: startDate,
+      DateAppointmentEnd: endDate,
+    },
+    userIds
+  );
+};
 
 export const getAppointmentsForUser = async (
   startDate?: string,
@@ -560,48 +576,25 @@ export const getAppointmentsForUser = async (
 
     console.log('[API] Appointments request params:', params);
 
-    // Call Heardat API
-    const data = await heardatApiCall('Appointments', params);
-
-    // Parse the response if it's a string
-    let parsedData = data;
-    if (typeof data === 'string') {
-      try {
-        parsedData = JSON.parse(data);
-      } catch (parseError) {
-        console.error('[API] Failed to parse appointments response:', parseError);
-        return { appointments: [] };
-      }
-    }
-
-    console.log('[API] Appointments fetched successfully, raw data:', parsedData);
-
-    // Return in a consistent format without dropping the assistant list. Some
-    // Heardat responses contain only assistant appointments for the requested
-    // user, so checking only `appointments` would incorrectly return an empty
-    // result.
-    if (parsedData && parsedData.appointments && Array.isArray(parsedData.appointments)) {
-      console.log('[API] Found', parsedData.appointments.length, 'appointments in response');
-      return parsedData;
-    } else if (
-      parsedData &&
-      (
-        Array.isArray(parsedData.assistants) ||
-        Array.isArray(parsedData.assistant) ||
-        Array.isArray(parsedData.assistantAppointments) ||
-        Array.isArray(parsedData.appointmentsAsAssistant)
-      )
-    ) {
-      console.log('[API] Found assistant appointments in response');
-      return { appointments: [], ...parsedData };
-    } else if (Array.isArray(parsedData)) {
-      // If the response is directly an array, wrap it
-      console.log('[API] Response is array, wrapping in appointments object');
-      return { appointments: parsedData };
-    } else {
-      console.log('[API] No appointments found in response structure');
-      return { appointments: [] };
-    }
+    const data = await fetchUserCalendarAppointments(
+      requestParams => {
+        // Identify both lookups in device logs without logging session keys.
+        console.log('[API] Calendar lookup:', {
+          userId: requestParams.UserIDAssigned,
+          lookup: requestParams.AppointmentID ? 'Assignment detail' : 'Calendar list',
+          startDate: requestParams.DateAppointmentStart,
+          endDate: requestParams.DateAppointmentEnd,
+        });
+        return heardatApiCall('Appointments', requestParams);
+      },
+      params
+    );
+    console.log('[API] Loaded user appointments:', {
+      userId: params.UserIDAssigned,
+      examinerCount: data.appointments.length,
+      assistantCount: data.assistants.length,
+    });
+    return data;
   } catch (error) {
     console.error('[API] Failed to get appointments for user:', error);
     throw error;

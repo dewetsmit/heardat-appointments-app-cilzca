@@ -1,3 +1,4 @@
+import { getAssistantIds } from '@/utils/assistants';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -108,7 +109,7 @@ export default function CreateAppointmentScreen() {
   const [selectedBranch, setSelectedBranch] = useState<DropdownOption | null>(null);
   const [selectedProcedure, setSelectedProcedure] = useState<DropdownOption | null>(null);
   const [selectedExaminer, setSelectedExaminer] = useState<DropdownOption | null>(null);
-  const [selectedAssistant, setSelectedAssistant] = useState<DropdownOption | null>(null);
+  const [selectedAssistants, setSelectedAssistants] = useState<DropdownOption[]>([]);
   const [selectedAppointmentType, setSelectedAppointmentType] = useState<DropdownOption | null>({ id: 'Appointment', label: 'Appointment' });
   const selectedTypeId = selectedAppointmentType?.id || 'Appointment';
   const isPatientInfoRequired = selectedTypeId === 'Appointment' || selectedTypeId === 'Theater';
@@ -353,25 +354,14 @@ export default function CreateAppointmentScreen() {
           }
         }
 
-        // Restore the saved assistant independently of the examiner.
-        const assignedAssistant = apt.UserIDAssignedAssistant ?? apt.assistantId;
-        const assistantValues = Array.isArray(assignedAssistant)
-          ? assignedAssistant
-          : typeof assignedAssistant === 'object' && assignedAssistant !== null
-            ? [assignedAssistant]
-            : String(assignedAssistant || '').split(',');
-        const assistantId = assistantValues
-          .map((value: any) => String(value?.UserID ?? value?.id ?? value).trim())
-          .find((id: string) => id && id !== '0');
-        if (assistantId) {
-          const assistant = assistants.find(person => String(person.id) === assistantId);
-          const label = assistant?.full_name || apt.AssistantNames?.[0] || apt.AssistantName ||
-            `${apt.AssignedAssistant_FirstName || ''} ${apt.AssignedAssistant_LastName || ''}`.trim() ||
-            'Unknown Assistant';
-          setSelectedAssistant({ id: assistantId, label });
-        } else {
-          setSelectedAssistant(null);
-        }
+        // Restore every saved assistant, including staff absent from the current list.
+        const assistantIds = getAssistantIds(apt.AssistantList ?? apt.UserIDAssignedAssistant ?? apt.assistantId);
+        setSelectedAssistants(assistantIds.map((id, index) => ({
+          id,
+          label: assistants.find(person => String(person.id) === id)?.full_name ||
+            apt.AssistantNames?.[index] ||
+            (index === 0 ? apt.AssistantName : undefined) || `Assistant ${id}`,
+        })));
 
         // Type
         if (apt.Type && (!selectedAppointmentType || selectedAppointmentType.id !== apt.Type)) {
@@ -488,7 +478,8 @@ export default function CreateAppointmentScreen() {
         ProcedureID: selectedProcedure ? selectedProcedure.id : "0",
         ConsoltationID: "0",
         Type: selectedAppointmentType?.id || "Appointment",
-        UserIDAssignedAssistant: canAssignAssistant && selectedAssistant ? selectedAssistant.id : "0",
+        UserIDAssignedAssistant: canAssignAssistant ? selectedAssistants[0]?.id || "0" : "0",
+        AssistantList: canAssignAssistant ? selectedAssistants.map(person => person.id).join(',') : "",
         RemindMe: sendReminders ? "1" : "0",
         DateEndAppointment: showUntilDate ? formatLocalDate(untilDate, endTime) : formatLocalDate(date, endTime),
         UserID: credentials.userId,
@@ -554,7 +545,7 @@ export default function CreateAppointmentScreen() {
           Alert.alert('Success', 'Appointment created successfully');
         }
         DeviceEventEmitter.emit('refreshCalendar');
-        DeviceEventEmitter.emit('refreshAppointmentDetail');
+        DeviceEventEmitter.emit('refreshAppointmentDetail', appointmentFormData);
         router.back();
       } else {
         Alert.alert('Success', 'Appointment created successfully', [
@@ -562,7 +553,7 @@ export default function CreateAppointmentScreen() {
             text: 'OK',
             onPress: () => {
               DeviceEventEmitter.emit('refreshCalendar');
-              DeviceEventEmitter.emit('refreshAppointmentDetail');
+              DeviceEventEmitter.emit('refreshAppointmentDetail', appointmentFormData);
               router.back();
             },
           },
@@ -575,7 +566,7 @@ export default function CreateAppointmentScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [date, time, duration, selectedBranch, selectedExaminer, selectedProcedure, selectedAssistant, canAssignAssistant, sendReminders, selectedClient, selectedAppointmentType, router, isEditMode, editAppointmentId, notes, notesId]);
+  }, [date, time, duration, selectedBranch, selectedExaminer, selectedProcedure, selectedAssistants, canAssignAssistant, sendReminders, selectedClient, selectedAppointmentType, router, isEditMode, editAppointmentId, notes, notesId]);
 
   const checkIfDoubleBooking = useCallback(async () => {
     console.log('[CreateAppointment] Checking for double bookings');
@@ -613,7 +604,7 @@ export default function CreateAppointmentScreen() {
       let selectedDayAppointments: HeardatAppointment[] = [];
 
       try {
-        const usersToCheck = [selectedExaminer, canAssignAssistant ? selectedAssistant : null]
+        const usersToCheck = [selectedExaminer, ...(canAssignAssistant ? selectedAssistants : [])]
           .filter((person): person is DropdownOption => Boolean(person))
           .filter((person, index, people) =>
             index === people.findIndex(candidate => candidate.id === person.id)
@@ -711,7 +702,7 @@ export default function CreateAppointmentScreen() {
       console.error('[CreateAppointment] Error in double booking check:', error);
       Alert.alert('Error', 'Failed to check for double bookings. Please try again.');
     }
-  }, [date, time, duration, selectedClient, selectedBranch, selectedProcedure, selectedExaminer, selectedAssistant, canAssignAssistant, createAppointment, doubleBookingAlert]);
+  }, [date, time, duration, selectedClient, selectedBranch, selectedProcedure, selectedExaminer, selectedAssistants, canAssignAssistant, createAppointment, doubleBookingAlert]);
 
   const handleSubmit = async () => {
     if (isEditMode) {
@@ -883,6 +874,11 @@ export default function CreateAppointmentScreen() {
                 </View>
               )}
 
+              {dropdownKey === 'assistant' && (
+                <TouchableOpacity onPress={closeDropdown} style={styles.dropdownItem} accessibilityRole="button">
+                  <Text style={[styles.dropdownItemText, { color: colors.primary }]}>Done</Text>
+                </TouchableOpacity>
+              )}
               <ScrollView style={styles.dropdownList} keyboardShouldPersistTaps="handled">
                 {isLoadingClients && isClientDropdown ? (
                   <View style={styles.loadingDropdown}>
@@ -909,13 +905,13 @@ export default function CreateAppointmentScreen() {
                         onPress={() => {
                           console.log(`[CreateAppointment] Selected ${dropdownKey}:`, option.label);
                           onSelect(option);
-                          closeDropdown();
+                          if (dropdownKey !== 'assistant') closeDropdown();
                         }}
                       >
                         <Text style={[styles.dropdownItemText, { color: colors.text }]}>
                           {option.label}
                         </Text>
-                        {value?.id === option.id && (
+                        {(dropdownKey === 'assistant' ? selectedAssistants.some(person => person.id === option.id) : value?.id === option.id) && (
                           <IconSymbol
                             ios_icon_name="checkmark"
                             android_material_icon_name="check"
@@ -1033,7 +1029,7 @@ export default function CreateAppointmentScreen() {
             (option) => {
               setSelectedAppointmentType(option);
               if (option.id === 'Leave') {
-                setSelectedAssistant(null);
+                setSelectedAssistants([]);
               }
             },
             'appointmentType'
@@ -1193,10 +1189,12 @@ export default function CreateAppointmentScreen() {
 
           {/* Assistant Dropdown */}
           {canAssignAssistant && renderDropdown(
-            'Assistant (Optional)',
-            selectedAssistant,
+            'Assistants (Optional)',
+            selectedAssistants.length ? { id: 'assistants', label: selectedAssistants.map(person => person.label).join(', ') } : null,
             assistantOptions,
-            setSelectedAssistant,
+            (option) => setSelectedAssistants(current => current.some(person => person.id === option.id)
+              ? current.filter(person => person.id !== option.id)
+              : [...current, option]),
             'assistant'
           )}
 

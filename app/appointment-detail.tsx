@@ -1,5 +1,6 @@
+import { getAssistantIds } from '@/utils/assistants';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -43,6 +44,7 @@ interface AppointmentDetail {
   ProcedureName?: string;
   ProcedureID?: string;
   UserIDAssigned?: string;
+  AssistantList?: string | string[];
   UserIDAssignedAssistant?: string | string[] | any[];
   AssistantName?: string;
   AssistantNames?: string[];
@@ -57,20 +59,16 @@ const getUserDisplayName = (user: any): string =>
   user?.full_name ||
   `${user?.FirstName || ''} ${user?.LastName || ''}`.trim();
 
-const getAssistantIds = (appointment: AppointmentDetail): string[] => {
-  const value: any = appointment.UserIDAssignedAssistant ?? appointment.assistantId;
-  const values = Array.isArray(value) ? value : String(value || '').split(',');
-  return [...new Set(values
-    .map((item: any) => String(item?.UserID ?? item?.id ?? item).trim())
-    .filter((id: string) => id && id !== '0'))];
-};
-
 export default function AppointmentDetailScreen() {
-  const { appointmentId, passedClientName, passedAudiologistName } = useLocalSearchParams<{
+  const { appointmentId, passedClientName, passedAudiologistName, branchId, examinerId, appointmentDate } = useLocalSearchParams<{
     appointmentId: string;
+    branchId?: string;
+    examinerId?: string;
+    appointmentDate?: string;
     passedClientName?: string;
     passedAudiologistName?: string;
   }>();
+  const requestContext = useRef<Partial<Pick<AppointmentDetail, 'BranchID' | 'UserIDAssigned' | 'DateAppointment'>>>({ BranchID: branchId, UserIDAssigned: examinerId, DateAppointment: appointmentDate });
   const router = useRouter();
   const theme = useTheme();
   const { procedures } = useAuth();
@@ -87,7 +85,9 @@ export default function AppointmentDetailScreen() {
     loadAppointmentDetails();
 
     // Listen for updates from edit screen
-    const subscription = DeviceEventEmitter.addListener('refreshAppointmentDetail', () => {
+    const subscription = DeviceEventEmitter.addListener('refreshAppointmentDetail', (updated?: AppointmentDetail) => {
+      if (updated && String(updated.AppointmentID) !== String(appointmentId)) return;
+      if (updated) requestContext.current = updated;
       console.log('[AppointmentDetail] Refreshing due to update');
       loadAppointmentDetails();
     });
@@ -104,11 +104,33 @@ export default function AppointmentDetailScreen() {
       setLoading(true);
       setLoadingNotes(true);
 
+      let context = requestContext.current;
+      if (!context.BranchID || !context.UserIDAssigned || !moment(context.DateAppointment).isValid() || !context.DateAppointment) {
+        // Direct links may not include the calendar context. Resolve it before
+        // making the full request rather than sending empty filter values.
+        const initial = await heardatApiCall('Appointments', { AppointmentID: appointmentId }, 'GET');
+        const parsed = typeof initial === 'string' ? JSON.parse(initial) : initial;
+        const records = parsed.appointments || parsed;
+        const record = Array.isArray(records)
+          ? records.find((item: AppointmentDetail) => String(item.AppointmentID) === String(appointmentId))
+          : undefined;
+        if (!record) throw new Error('Appointment not found');
+        context = record;
+        requestContext.current = context;
+      }
+      if (!context.BranchID || !context.UserIDAssigned || !context.DateAppointment || !moment(context.DateAppointment).isValid()) {
+        throw new Error('Appointment branch, examiner, or date is missing.');
+      }
       const params = {
         AppointmentID: appointmentId,
+        BranchID: String(context.BranchID),
+        UserIDAssigned: String(context.UserIDAssigned),
+        Deleted: '0',
+        DateAppointmentStart: moment(context.DateAppointment).format('YYYY-MM-DD'),
+        DateAppointmentEnd: moment(context.DateAppointment).add(1, 'day').format('YYYY-MM-DD'),
       };
 
-      const data = await heardatApiCall('Appointments', params);
+      const data = await heardatApiCall('Appointments', params, 'GET');
 
       let parsedData = data;
       if (typeof data === 'string') {
@@ -119,7 +141,9 @@ export default function AppointmentDetailScreen() {
       const appointments = parsedData.appointments || parsedData;
 
       if (Array.isArray(appointments) && appointments.length > 0) {
-        const appointmentData = { ...appointments[0] };
+        const record = appointments.find((item: AppointmentDetail) => String(item.AppointmentID) === String(appointmentId));
+        if (!record) throw new Error('Appointment not found in response');
+        const appointmentData = { ...record };
 
         // Assistant assignments are returned as a separate list by some API
         // responses. Keep every assignment associated with this appointment.
@@ -131,13 +155,15 @@ export default function AppointmentDetailScreen() {
           );
           const assistantIds = matchingAssistants
             .map((assistant: any) =>
-              assistant.UserIDAssignedAssistant ?? assistant.UserID ?? assistant.id
+              assistant.AssistantList ?? assistant.UserIDAssignedAssistant ?? assistant.UserID ?? assistant.id
             )
             .filter(Boolean);
           const assistantNames = matchingAssistants.map(getUserDisplayName).filter(Boolean);
 
           if (assistantIds.length > 0) {
-            appointmentData.UserIDAssignedAssistant = assistantIds;
+            appointmentData.AssistantList = getAssistantIds([
+              appointmentData.AssistantList ?? appointmentData.UserIDAssignedAssistant, ...assistantIds
+            ].flat());
           }
           if (assistantNames.length > 0) {
             appointmentData.AssistantNames = [...new Set(assistantNames)];
@@ -161,7 +187,9 @@ export default function AppointmentDetailScreen() {
         const assistantLastName = appointmentData.AssignedAssistant_LastName;
         if (assistantFirstName || assistantLastName) {
           appointmentData.AssistantName = `${assistantFirstName || ''} ${assistantLastName || ''}`.trim();
-          appointmentData.AssistantNames = [appointmentData.AssistantName];
+          appointmentData.AssistantNames = [...new Set([
+            ...(appointmentData.AssistantNames || []), appointmentData.AssistantName
+          ])];
         }
 
         // Map ProcedureName from context procedures
@@ -207,7 +235,7 @@ export default function AppointmentDetailScreen() {
             );
             const examinerName = getUserDisplayName(examiner);
 
-            const resolvedAssistantNames = getAssistantIds(prev)
+            const resolvedAssistantNames = getAssistantIds(prev.AssistantList ?? prev.UserIDAssignedAssistant ?? prev.assistantId)
               .map(id => usersRes.find((candidate: any) =>
                 String(candidate.UserID ?? candidate.id) === id
               ))
@@ -415,6 +443,51 @@ export default function AppointmentDetailScreen() {
     return duration;
   };
 
+  const renderCloseButton = Platform.OS === 'ios' ? () => (
+    <TouchableOpacity
+      onPress={() => router.back()}
+      style={styles.closeButton}
+      accessibilityRole="button"
+      accessibilityLabel="Close appointment details"
+    >
+      <IconSymbol
+        ios_icon_name="xmark"
+        android_material_icon_name="close"
+        size={24}
+        color={theme.colors.primary}
+      />
+    </TouchableOpacity>
+  ) : undefined;
+
+  const renderHeaderActions = () => (
+    <View style={styles.headerButtons}>
+      <TouchableOpacity
+        style={styles.headerButton}
+        onPress={handleEdit}
+        disabled={deleting}
+      >
+        <IconSymbol
+          ios_icon_name="pencil"
+          android_material_icon_name="edit"
+          size={24}
+          color={theme.colors.primary}
+        />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.headerButton}
+        onPress={confirmDelete}
+        disabled={deleting}
+      >
+        <IconSymbol
+          ios_icon_name="trash"
+          android_material_icon_name="delete"
+          size={24}
+          color="#FF3B30"
+        />
+      </TouchableOpacity>
+    </View>
+  );
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
@@ -423,6 +496,8 @@ export default function AppointmentDetailScreen() {
             title: 'Appointment Details',
             headerShown: true,
             headerBackTitle: 'Back',
+            headerLeft: Platform.OS === 'ios' ? () => null : undefined,
+            headerRight: renderCloseButton,
           }}
         />
         <View style={styles.loadingContainer}>
@@ -443,6 +518,8 @@ export default function AppointmentDetailScreen() {
             title: 'Appointment Details',
             headerShown: true,
             headerBackTitle: 'Back',
+            headerLeft: Platform.OS === 'ios' ? () => null : undefined,
+            headerRight: renderCloseButton,
           }}
         />
         <View style={styles.errorContainer}>
@@ -471,34 +548,8 @@ export default function AppointmentDetailScreen() {
           title: 'Appointment Details',
           headerShown: true,
           headerBackTitle: 'Back',
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleEdit}
-                disabled={deleting}
-              >
-                <IconSymbol
-                  ios_icon_name="pencil"
-                  android_material_icon_name="edit"
-                  size={24}
-                  color={theme.colors.primary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={confirmDelete}
-                disabled={deleting}
-              >
-                <IconSymbol
-                  ios_icon_name="trash"
-                  android_material_icon_name="delete"
-                  size={24}
-                  color="#FF3B30"
-                />
-              </TouchableOpacity>
-            </View>
-          ),
+          headerLeft: Platform.OS === 'ios' ? renderHeaderActions : undefined,
+          headerRight: Platform.OS === 'ios' ? renderCloseButton : renderHeaderActions,
         }}
       />
 
@@ -675,7 +726,7 @@ export default function AppointmentDetailScreen() {
                 color={theme.dark ? '#98989D' : '#666'}
               />
               <Text style={[styles.infoLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                Assistant
+                Assistants
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
                 {(appointment.AssistantNames?.length
@@ -846,6 +897,9 @@ export default function AppointmentDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  closeButton: {
+    marginRight: -8,
+  },
   container: {
     flex: 1,
   },

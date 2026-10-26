@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { Stack, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { heardatApiCall, getHeardatCredentials, getBranches, createNewPatient, getGenders, getLanguages, getTitles, getMedicalAids, getMedicalAidPlans } from '@/utils/api';
+
+import { generateClientIdNumber } from '@/utils/clientIdNumber';
 
 interface DropdownOption {
   id: string;
@@ -38,8 +40,8 @@ export default function NewClientScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [initials, setInitials] = useState('');
-  const [idNumber, setIdNumber] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState(new Date());
+  const idNumber = useMemo(() => generateClientIdNumber(dateOfBirth), [dateOfBirth]);
   const [cellphoneNumber, setCellphoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [selectedGender, setSelectedGender] = useState<DropdownOption | null>(null);
@@ -55,8 +57,8 @@ export default function NewClientScreen() {
   const [mmFirstName, setMmFirstName] = useState('');
   const [mmLastName, setMmLastName] = useState('');
   const [mmInitials, setMmInitials] = useState('');
-  const [mmIdNumber, setMmIdNumber] = useState('');
   const [mmDateOfBirth, setMmDateOfBirth] = useState(new Date());
+  const mmIdNumber = useMemo(() => generateClientIdNumber(mmDateOfBirth), [mmDateOfBirth]);
   const [mmCellphoneNumber, setMmCellphoneNumber] = useState('');
   const [mmEmail, setMmEmail] = useState('');
   const [mmSelectedGender, setMmSelectedGender] = useState<DropdownOption | null>(null);
@@ -82,6 +84,7 @@ export default function NewClientScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showMmDatePicker, setShowMmDatePicker] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [medicalAidSearchQuery, setMedicalAidSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [branches, setBranches] = useState<DropdownOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -117,7 +120,11 @@ export default function NewClientScreen() {
           id: m.MedicalAidID ?? m.MedicalAidId ?? m.medicalAidId ?? m.medicalaidid ?? m.id,
           label: m.Name ?? m.name ?? m.label,
         }))
-        .filter((option: DropdownOption) => option.id != null));
+        .filter((option: DropdownOption) => option.id != null)
+        .sort((a: DropdownOption, b: DropdownOption) =>
+          Number(String(b.label).trim().toLowerCase() === 'private patient') -
+          Number(String(a.label).trim().toLowerCase() === 'private patient')
+        ));
 
       console.log('[NewClient] Initial dynamic data loaded');
     } catch (error) {
@@ -314,7 +321,7 @@ export default function NewClientScreen() {
         Home: "",
         Cell: cellphoneNumber,
         Email: email,
-        Gender: selectedGender?.id || '',
+        Gender: String(selectedGender?.id ?? ''),
         TitleID: selectedTitle?.id || '',
         LanguageID: selectedLanguage?.id || '',
         BranchID: selectedBranch.id,
@@ -355,7 +362,7 @@ export default function NewClientScreen() {
           Home: "",
           Cell: mmCellphoneNumber,
           Email: mmEmail,
-          Gender: mmSelectedGender?.id || '',
+          Gender: String(mmSelectedGender?.id ?? ''),
           TitleID: mmSelectedTitle?.id || '',
           LanguageID: mmSelectedLanguage?.id || '',
           BranchID: mmSelectedBranch?.id || selectedBranch.id, // Fallback to main branch
@@ -411,6 +418,10 @@ export default function NewClientScreen() {
     disabledPlaceholder: string = 'Select required fields first'
   ) => {
     const isOpen = activeDropdown === dropdownKey;
+    const isMedicalAidDropdown = dropdownKey === 'medicalAid' || dropdownKey === 'mmMedicalAid';
+    const filteredOptions = isMedicalAidDropdown
+      ? options.filter(option => String(option.label).toLowerCase().includes(medicalAidSearchQuery.trim().toLowerCase()))
+      : options;
     const displayValue = value ? value.label : disabled ? disabledPlaceholder : 'Select...';
 
     return (
@@ -422,7 +433,10 @@ export default function NewClientScreen() {
             { backgroundColor: theme.dark ? '#2C2C2E' : '#F2F2F7', borderColor: theme.colors.border },
             disabled && { opacity: 0.5 },
           ]}
-          onPress={() => setActiveDropdown(isOpen ? null : dropdownKey)}
+          onPress={() => {
+            setActiveDropdown(isOpen ? null : dropdownKey);
+            if (isMedicalAidDropdown && !isOpen) setMedicalAidSearchQuery('');
+          }}
           disabled={disabled}
         >
           <Text style={[styles.dropdownText, { color: value ? theme.colors.text : '#999' }]}>
@@ -436,15 +450,55 @@ export default function NewClientScreen() {
           />
         </TouchableOpacity>
 
-        <Modal visible={isOpen} transparent animationType="fade">
+        <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setActiveDropdown(null)}>
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
             onPress={() => setActiveDropdown(null)}
           >
             <View style={[styles.dropdownModal, { backgroundColor: theme.colors.card }]}>
-              <ScrollView style={styles.dropdownList}>
-                {options.map((option) => (
+              {isMedicalAidDropdown && (
+                <View style={[styles.searchContainer, { borderBottomColor: theme.colors.border }]}>
+                  <IconSymbol
+                    ios_icon_name="magnifyingglass"
+                    android_material_icon_name="search"
+                    size={20}
+                    color={theme.colors.text + '80'}
+                  />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.colors.text }]}
+                    placeholder="Search medical aids..."
+                    placeholderTextColor={theme.colors.text + '80'}
+                    accessibilityLabel="Search medical aids"
+                    value={medicalAidSearchQuery}
+                    onChangeText={setMedicalAidSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                  />
+                  {medicalAidSearchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setMedicalAidSearchQuery('')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear medical aid search"
+                    >
+                      <IconSymbol
+                        ios_icon_name="xmark.circle.fill"
+                        android_material_icon_name="cancel"
+                        size={20}
+                        color={theme.colors.text + '80'}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              <ScrollView style={styles.dropdownList} keyboardShouldPersistTaps="handled">
+                {filteredOptions.length === 0 && isMedicalAidDropdown && (
+                  <Text style={[styles.dropdownItemText, { color: theme.colors.text, padding: 16 }]}>
+                    No medical aids found
+                  </Text>
+                )}
+                {filteredOptions.map((option) => (
                   <TouchableOpacity
                     key={option.id}
                     style={[
@@ -482,7 +536,8 @@ export default function NewClientScreen() {
     value: string,
     onChangeText: (text: string) => void,
     placeholder: string = '',
-    keyboardType: 'default' | 'email-address' | 'numeric' | 'phone-pad' = 'default'
+    keyboardType: 'default' | 'email-address' | 'numeric' | 'phone-pad' = 'default',
+    editable: boolean = true
   ) => {
     return (
       <View style={styles.fieldContainer}>
@@ -497,6 +552,7 @@ export default function NewClientScreen() {
           placeholder={placeholder}
           placeholderTextColor="#999"
           keyboardType={keyboardType}
+          editable={editable}
         />
       </View>
     );
@@ -586,7 +642,7 @@ export default function NewClientScreen() {
           {renderTextInput('First Name *', firstName, setFirstName, 'Enter first name')}
           {renderTextInput('Last Name *', lastName, setLastName, 'Enter last name')}
           {renderTextInput('Initials', initials, setInitials, 'Enter initials')}
-          {renderTextInput('ID Number *', idNumber, setIdNumber, 'Enter ID number')}
+          {renderTextInput('ID Number (generated)', idNumber, () => {}, '', 'numeric', false)}
           {renderDatePicker('Date of Birth', dateOfBirth, showDatePicker, () => setShowDatePicker(true), handleDateChange)}
           {renderTextInput('Cellphone Number *', cellphoneNumber, setCellphoneNumber, 'Enter cellphone number', 'phone-pad')}
           {renderTextInput('Email', email, setEmail, 'Enter email address', 'email-address')}
@@ -607,7 +663,7 @@ export default function NewClientScreen() {
             {renderTextInput('First Name *', mmFirstName, setMmFirstName, 'Enter first name')}
             {renderTextInput('Last Name *', mmLastName, setMmLastName, 'Enter last name')}
             {renderTextInput('Initials', mmInitials, setMmInitials, 'Enter initials')}
-            {renderTextInput('ID Number *', mmIdNumber, setMmIdNumber, 'Enter ID number')}
+            {renderTextInput('ID Number (generated)', mmIdNumber, () => {}, '', 'numeric', false)}
             {renderDatePicker('Date of Birth', mmDateOfBirth, showMmDatePicker, () => setShowMmDatePicker(true), handleMmDateChange)}
             {renderTextInput('Cellphone Number', mmCellphoneNumber, setMmCellphoneNumber, 'Enter cellphone number', 'phone-pad')}
             {renderTextInput('Email', mmEmail, setMmEmail, 'Enter email address', 'email-address')}
@@ -729,6 +785,19 @@ const styles = StyleSheet.create({
     maxHeight: '60%',
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 8,
   },
   dropdownList: {
     maxHeight: 400,

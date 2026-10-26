@@ -1,9 +1,10 @@
 
+import { getUserCalendarAppointments } from '@/utils/calendarAppointments';
 import { useAppointments } from '@/contexts/AppointmentContext';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Calendar } from 'react-native-calendars';
-import { getUserAppointments, formatDateForAPI } from '@/utils/api';
+import { getAppointmentsForUsers, formatDateForAPI } from '@/utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -47,18 +48,10 @@ interface HeardatAppointment {
   LastName?: string;
   ProcedureID?: string;
   ProcedureName?: string;
+  AssistantList?: string | string[];
   UserIDAssignedAssistant?: string | string[] | any[];
   calendarRole?: 'Practitioner' | 'Assistant';
 }
-
-const getAssistantAppointments = (data: any): HeardatAppointment[] => {
-  const assistantList =
-    data?.assistants ??
-    data?.assistant ??
-    data?.assistantAppointments ??
-    data?.appointmentsAsAssistant;
-  return Array.isArray(assistantList) ? assistantList : [];
-};
 
 const getAppointmentIdentity = (appointment: HeardatAppointment): string =>
   [
@@ -79,6 +72,7 @@ const getAppointmentSlotIdentity = (appointment: HeardatAppointment): string =>
 
 const getAssignedAssistantIds = (appointment: HeardatAppointment): string[] => {
   const assignedAssistants: any =
+    appointment.AssistantList ??
     appointment.UserIDAssignedAssistant ??
     (appointment as any).userIDAssignedAssistant ??
     (appointment as any).AssistantID ??
@@ -93,14 +87,6 @@ const getAssignedAssistantIds = (appointment: HeardatAppointment): string[] => {
   return values
     .map((value: any) => String(value?.UserID ?? value?.id ?? value).trim())
     .filter((id: string) => id && id !== '0');
-};
-
-const belongsToAssistant = (appointment: HeardatAppointment, assistantId: string) => {
-  const assignedAssistantIds = getAssignedAssistantIds(appointment);
-
-  // The API may already scope the assistant list to the requested user and
-  // omit the assignment field. In that case the record belongs in this lane.
-  return assignedAssistantIds.length === 0 || assignedAssistantIds.includes(String(assistantId));
 };
 
 // Helper function to get audiologist color for dots
@@ -178,42 +164,26 @@ export default function CalendarScreen() {
         console.log('[Calendar] Day view - fetching for', selectedDate);
       }
 
-      // Fetch appointments for each selected audiologist
+      // Load assignment details once and distribute them to the selected calendars.
       const allAppointments: HeardatAppointment[] = [];
 
+      const appointmentsByUser = await getAppointmentsForUsers(
+        startDate, endDate, selectedAudiologists.map(person => String(person.user_id))
+      );
+
       for (const audiologist of selectedAudiologists) {
-        console.log('[Calendar] Fetching appointments for audiologist:', audiologist.full_name, 'ID:', audiologist.user_id);
+        console.log('[Calendar] Reading appointments for audiologist:', audiologist.full_name, 'ID:', audiologist.user_id);
 
         try {
-          const searchUser = {
-            CompanyID: user.CompanyID,
-            BranchID: user.BranchID,
-            UserID: audiologist.user_id,
-          };
-
-          const data = await getUserAppointments(startDate, endDate, searchUser);
+          const data = appointmentsByUser[String(audiologist.user_id)];
 
           const examinerAppointments: HeardatAppointment[] = Array.isArray(data?.appointments)
             ? data.appointments
             : [];
-          const assistantAppointments = getAssistantAppointments(data).filter((apt) =>
-            belongsToAssistant(apt, audiologist.user_id)
+          const userAppointments = getUserCalendarAppointments<HeardatAppointment>(
+            data, audiologist.user_id
           );
-          const roleAppointments = [
-            ...assistantAppointments.map(apt => ({ ...apt, calendarRole: 'Assistant' as const })),
-            ...examinerAppointments.map(apt => ({
-              ...apt,
-              calendarRole: getAssignedAssistantIds(apt).includes(String(audiologist.user_id))
-                ? 'Assistant' as const
-                : 'Practitioner' as const,
-            })),
-          ];
-          const userAppointments = roleAppointments.filter(
-            (apt, index, list) =>
-              index === list.findIndex((candidate) =>
-                getAppointmentIdentity(candidate) === getAppointmentIdentity(apt)
-              )
-          );
+          const assistantAppointments = userAppointments.filter(apt => apt.calendarRole === 'Assistant');
 
           if (userAppointments.length > 0) {
             console.log(
@@ -318,6 +288,9 @@ export default function CalendarScreen() {
       pathname: '/appointment-detail',
       params: {
         appointmentId: appointment.AppointmentID,
+        branchId: String(appointment.BranchID ?? ''),
+        examinerId: String(appointment.UserIDAssigned ?? ''),
+        appointmentDate: appointment.DateAppointment,
         passedClientName: clientName,
         // `audiologistName` is the calendar lane owner, which can be an
         // assistant. Prefer the appointment's actual examiner name.
@@ -442,12 +415,14 @@ export default function CalendarScreen() {
     return marks;
   }, [appointments, selectedDate, theme.colors.primary, getAudiologistColorForDot]);
 
-  // Filter appointments for selected date (for month view)
+  // Filter and sort the selected day's appointments from earliest to latest.
   const selectedDateAppointments = useMemo(() => {
-    return appointments.filter((apt) => {
-      const aptDate = moment(apt.DateAppointment).format('YYYY-MM-DD');
-      return aptDate === selectedDate;
-    });
+    return appointments
+      .filter((apt) => {
+        const aptDate = moment(apt.DateAppointment).format('YYYY-MM-DD');
+        return aptDate === selectedDate;
+      })
+      .sort((a, b) => moment(a.DateAppointment).valueOf() - moment(b.DateAppointment).valueOf());
   }, [appointments, selectedDate]);
 
   // Group appointments by audiologistName
