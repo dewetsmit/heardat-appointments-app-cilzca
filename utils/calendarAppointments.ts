@@ -10,10 +10,35 @@ interface AppointmentAssignment {
 
 const parseAppointmentResponse = (response: any): any => {
   let data = response;
-  for (let depth = 0; depth < 3 && typeof data === 'string'; depth++) {
-    data = JSON.parse(data);
+  for (let depth = 0; depth < 6 && typeof data === 'string'; depth++) {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      throw new Error('The appointments service returned an invalid response. Please try again.');
+    }
   }
-  return Array.isArray(data) ? { appointments: data } : data;
+  if (Array.isArray(data)) return { appointments: data };
+  const hasCollection = data && typeof data === 'object' &&
+    ['appointments', 'assistants', 'assistant', 'assistantAppointments', 'appointmentsAsAssistant']
+      .some(key => Array.isArray(data[key]));
+  if (!hasCollection) {
+    throw new Error('The appointments service did not return an appointment list. Please try again.');
+  }
+  return data;
+};
+
+const requestAppointments = async (
+  request: (params: Record<string, string>) => Promise<any>,
+  params: Record<string, string>
+) => {
+  try {
+    return parseAppointmentResponse(await request(params));
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Session Expired') throw error;
+    const stage = params.AppointmentID ? 'appointment details' : 'calendar list';
+    const message = error instanceof Error ? error.message : 'Please try again.';
+    throw new Error(`Could not load ${stage}. ${message}`);
+  }
 };
 
 export const fetchCalendarAppointmentsForUsers = async (
@@ -21,13 +46,34 @@ export const fetchCalendarAppointmentsForUsers = async (
   params: Record<string, string>,
   userIds: string[]
 ): Promise<Record<string, { appointments: any[]; assistants: any[] }>> => {
-  // The company/date list includes meetings whose examiner is not selected.
-  // Its AssistantList is null even when the detail endpoint has assignments.
-  const listParams = { ...params };
-  delete listParams.UserIDAssigned;
-  delete listParams.BranchID;
-  const list = parseAppointmentResponse(await request(listParams));
-  const records: any[] = Array.isArray(list?.appointments) ? list.appointments : [];
+  // Use the supported user-scoped list request. Omitting the branch and user
+  // filters can return a JSON-encoded error string instead of appointments.
+  const selectedUserIds = [...new Set(userIds.map(String))];
+  const recordsById = new Map<string, any>();
+  const assistantMembership = new Map<string, Set<string>>();
+  const identity = (record: any) => JSON.stringify([
+    String(record.AppointmentID), record.DateAppointment, String(record.UserIDAssigned),
+  ]);
+  for (let offset = 0; offset < selectedUserIds.length; offset += 6) {
+    const lists = await Promise.all(selectedUserIds.slice(offset, offset + 6).map(async userId => ({
+      userId,
+      list: await requestAppointments(request, {
+        ...params,
+        BranchID: params.BranchID || '0',
+        UserIDAssigned: userId,
+      }),
+    })));
+    for (const { userId, list } of lists) {
+      const assistants = list.assistants ?? list.assistant ??
+        list.assistantAppointments ?? list.appointmentsAsAssistant;
+      const assignedAsAssistant: any[] = Array.isArray(assistants) ? assistants : [];
+      assistantMembership.set(userId, new Set(assignedAsAssistant.map(identity)));
+      for (const record of [...(list.appointments || []), ...assignedAsAssistant]) {
+        recordsById.set(identity(record), record);
+      }
+    }
+  }
+  const records = [...recordsById.values()];
   const hydrated: any[] = [];
   // Limit concurrent detail requests when a month contains many appointments.
   for (let offset = 0; offset < records.length; offset += 6) {
@@ -35,12 +81,12 @@ export const fetchCalendarAppointmentsForUsers = async (
       if (!record.AppointmentID || record.BranchID == null || record.UserIDAssigned == null) {
         throw new Error('Appointment assignment details are missing their lookup context.');
       }
-      const detail = parseAppointmentResponse(await request({
+      const detail = await requestAppointments(request, {
         ...params,
         AppointmentID: String(record.AppointmentID),
         BranchID: String(record.BranchID),
         UserIDAssigned: String(record.UserIDAssigned),
-      }));
+      });
       const match = detail?.appointments?.find((item: any) =>
         String(item.AppointmentID) === String(record.AppointmentID) &&
         item.DateAppointment === record.DateAppointment
@@ -49,13 +95,14 @@ export const fetchCalendarAppointmentsForUsers = async (
       return { ...record, ...match };
     })));
   }
-  return Object.fromEntries(userIds.map(id => {
+  return Object.fromEntries(selectedUserIds.map(id => {
     const userId = String(id);
     return [userId, {
       appointments: hydrated.filter(appointment => String(appointment.UserIDAssigned) === userId),
       assistants: hydrated.filter(appointment =>
         String(appointment.UserIDAssigned) !== userId &&
-        getAssistantIds([appointment.AssistantList, appointment.UserIDAssignedAssistant]).includes(userId)
+        (assistantMembership.get(userId)?.has(identity(appointment)) ||
+          getAssistantIds([appointment.AssistantList, appointment.UserIDAssignedAssistant]).includes(userId))
       ),
     }];
   }));

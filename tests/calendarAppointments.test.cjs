@@ -75,21 +75,21 @@ test('hydrates the null list assignment using the exact appointment lookup conte
     return JSON.stringify({ appointments: [params.AppointmentID ? assignedMeeting : meeting] });
   }, scope);
   assert.deepEqual(calls, [
-    { Deleted: '0', DateAppointmentStart: scope.DateAppointmentStart, DateAppointmentEnd: scope.DateAppointmentEnd },
+    { ...scope },
     { ...scope, AppointmentID: '100', BranchID: 'branch1', UserIDAssigned: 'examiner' },
   ]);
   assert.equal(getUserCalendarAppointments(data, 'assistant2').length, 1);
   assert.equal(data.assistants[0].AssistantList, assignedMeeting.AssistantList);
 });
 
-test('fetches once for all five members and puts the meeting in every assigned lane', async () => {
+test('fetches scoped lists and shares a single detail lookup across assigned lanes', async () => {
   let count = 0;
   const users = ['examiner', 'assistant1', 'assistant2', 'assistant3', 'assistant4', 'unassigned'];
   const result = await fetchCalendarAppointmentsForUsers(async params => {
     count++;
     return { appointments: [params.AppointmentID ? assignedMeeting : meeting] };
   }, scope, users);
-  assert.equal(count, 2);
+  assert.equal(count, users.length + 1);
   for (const userId of users.slice(0, 5)) {
     const appointments = getUserCalendarAppointments(result[userId], userId);
     assert.equal(appointments.length, 1, userId);
@@ -100,7 +100,7 @@ test('fetches once for all five members and puts the meeting in every assigned l
 
 test('an assistant-only selection retrieves a meeting whose examiner is hidden', async () => {
   const result = await fetchCalendarAppointmentsForUsers(async params => {
-    if (!params.AppointmentID) assert.equal(params.UserIDAssigned, undefined);
+    if (!params.AppointmentID) assert.equal(params.UserIDAssigned, 'assistant3');
     return { appointments: [params.AppointmentID ? assignedMeeting : meeting] };
   }, scope, ['assistant3']);
   assert.equal(getUserCalendarAppointments(result.assistant3, 'assistant3').length, 1);
@@ -125,4 +125,75 @@ test('missing details are reported rather than claiming no assistant assignments
   await assert.rejects(fetchUserCalendarAppointments(async params => ({
     appointments: params.AppointmentID ? [] : [meeting],
   }), scope), /Could not load appointment assistant assignments/);
+});
+
+test('plain-text and encoded server errors never escape as JSON syntax errors', async () => {
+  for (const value of ['Unexpected error', JSON.stringify('Unexpected error'), JSON.stringify(JSON.stringify('Unexpected error'))]) {
+    await assert.rejects(fetchUserCalendarAppointments(async () => value, scope), error => {
+      assert.equal(error instanceof SyntaxError, false);
+      assert.match(error.message, /Could not load calendar list.*invalid response/);
+      return true;
+    });
+  }
+});
+
+test('invalid response objects are not treated as an empty calendar', async () => {
+  for (const value of [null, {}, { Error: 'Unable to load appointments' }, { appointments: null }]) {
+    await assert.rejects(fetchUserCalendarAppointments(async () => value, scope), /did not return an appointment list/);
+  }
+});
+
+test('failed detail responses identify which lookup failed', async () => {
+  await assert.rejects(fetchUserCalendarAppointments(async params =>
+    params.AppointmentID ? 'Unexpected error' : { appointments: [meeting] }, scope),
+  /Could not load appointment details.*invalid response/);
+});
+
+test('session expiration propagates unchanged to the sign-in recovery flow', async () => {
+  const expired = new Error('Session Expired');
+  await assert.rejects(fetchUserCalendarAppointments(async () => { throw expired; }, scope), error => error === expired);
+});
+
+test('HTTP response parsing and calendar loading work together for double-encoded appointments', async () => {
+  const { parseHeardatResponse } = loadHelper('heardatResponse');
+  const result = await fetchUserCalendarAppointments(async params => parseHeardatResponse({
+    status: 200, ok: true,
+    text: async () => JSON.stringify(JSON.stringify({ appointments: [params.AppointmentID ? assignedMeeting : meeting] })),
+  }, () => assert.fail('session expired')), scope);
+  assert.equal(result.assistants.length, 1);
+  assert.equal(result.assistants[0].AppointmentID, meeting.AppointmentID);
+});
+
+test('calendar loading sends the required user and branch filters even without a caller scope', async () => {
+  const calls = [];
+  const result = await fetchCalendarAppointmentsForUsers(async params => {
+    calls.push(params);
+    // Reproduce the server failure from the incomplete company/date request.
+    if (!params.UserIDAssigned || !params.BranchID) return JSON.stringify('Unexpected request parameters');
+    return { appointments: [] };
+  }, { Companykey: 'company', Deleted: '0', DateAppointmentStart: scope.DateAppointmentStart,
+    DateAppointmentEnd: scope.DateAppointmentEnd }, ['examiner', 'assistant2']);
+  assert.deepEqual(calls.map(params => [params.UserIDAssigned, params.BranchID]), [
+    ['examiner', '0'], ['assistant2', '0'],
+  ]);
+  assert.deepEqual(result.examiner, { appointments: [], assistants: [] });
+});
+
+test('assistant-only scoped responses preserve membership missing from detail metadata', async () => {
+  const result = await fetchCalendarAppointmentsForUsers(async params => {
+    if (params.AppointmentID) return { appointments: [meeting] };
+    assert.equal(params.UserIDAssigned, 'assistant3');
+    return { assistants: [meeting] };
+  }, scope, ['assistant3']);
+  assert.equal(result.assistant3.assistants.length, 1);
+  assert.equal(getUserCalendarAppointments(result.assistant3, 'assistant3')[0].calendarRole, 'Assistant');
+});
+
+test('duplicate selected users and repeated list records share requests', async () => {
+  let calls = 0;
+  await fetchCalendarAppointmentsForUsers(async () => {
+    calls++;
+    return { appointments: [meeting, meeting] };
+  }, scope, ['examiner', 'examiner']);
+  assert.equal(calls, 2);
 });

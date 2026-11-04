@@ -1,4 +1,5 @@
 import { fetchCalendarAppointmentsForUsers, fetchUserCalendarAppointments } from './calendarAppointments';
+import { parseHeardatResponse } from './heardatResponse';
 
 import Constants from "expo-constants";
 import { Platform, DeviceEventEmitter } from "react-native";
@@ -253,31 +254,14 @@ export const heardatApiCall = async <T = any>(
       },
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("[Heardat API] Error response:", response.status, text);
-      throw new Error(`Heardat API error: ${response.status}`);
-    }
-
-    const responseText = await response.text();
-    console.log("[Heardat API] Raw response text (first 500 chars):", responseText.substring(0, 500));
-    const data = JSON.parse(responseText);
-
-    const stringifiedData = typeof data === 'object' ? JSON.stringify(data).toLowerCase() : String(data).toLowerCase();
-    if (
-      stringifiedData.includes('session expired') ||
-      stringifiedData.includes('invalid credentials') ||
-      (data.Error && data.Error.toLowerCase().includes('session'))
-    ) {
-      console.warn('[Heardat API] Detected Session Expiration in response payload');
+    const data = await parseHeardatResponse<T>(response, () => {
       DeviceEventEmitter.emit('sessionExpired');
-      throw new Error('Session Expired');
-    }
+    });
 
     console.log("[Heardat API] Success - parsed data type:", typeof data, "is array:", Array.isArray(data));
     return data;
   } catch (error) {
-    console.error("[Heardat API] Request failed:", error);
+    console.warn("[Heardat API] Request failed:", endpoint, error);
     throw error;
   }
 };

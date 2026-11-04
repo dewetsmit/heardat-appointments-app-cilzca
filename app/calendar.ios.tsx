@@ -124,6 +124,7 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(formatDateForAPI(new Date()));
   const [appointments, setAppointments] = useState<HeardatAppointment[]>([]);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [appointmentError, setAppointmentError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sideNavVisible, setSideNavVisible] = useState(false);
 
@@ -142,6 +143,7 @@ export default function CalendarScreen() {
     console.log('[Calendar] Loading appointments for', selectedAudiologists.length, 'audiologists on date:', selectedDate, 'viewMode:', viewMode);
     try {
       setIsLoadingAppointments(true);
+      setAppointmentError(null);
 
       // Calculate date range based on view mode
       let startDate = selectedDate;
@@ -243,7 +245,10 @@ export default function CalendarScreen() {
       console.log('[Calendar] Total appointments loaded:', appointmentsWithAssistantLanes.length);
       setAppointments(appointmentsWithAssistantLanes);
     } catch (error) {
-      console.error('[Calendar] Failed to load appointments:', error);
+      console.warn('[Calendar] Failed to load appointments:', error);
+      setAppointmentError(error instanceof Error && error.message === 'Session Expired'
+        ? 'Your session has expired. Please sign in again.'
+        : error instanceof Error ? error.message : 'Could not load appointments. Please try again.');
       setAppointments([]);
     } finally {
       setIsLoadingAppointments(false);
@@ -592,6 +597,15 @@ export default function CalendarScreen() {
           <Text style={[styles.loadingText, { color: theme.colors.text }]}>
             {loadingAppointmentsText}
           </Text>
+        </View>
+      ) : appointmentError ? (
+        <View style={styles.loadingContainer}>
+          <Text accessibilityRole="alert" style={[styles.loadingText, { color: theme.colors.text }]}>
+            {appointmentError}
+          </Text>
+          <TouchableOpacity accessibilityRole="button" onPress={loadAppointments}>
+            <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : viewMode === 'month' ? (
         <ScrollView
